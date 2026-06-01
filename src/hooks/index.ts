@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase, WAREHOUSE_ID } from '@/lib/supabase'
 import { useAppStore } from '@/store'
@@ -46,7 +46,6 @@ export function useEmployees() {
     refetchInterval: 30000,
   })
 
-  // Realtime subscription
   useEffect(() => {
     const channel = supabase
       .channel('employees-changes')
@@ -59,7 +58,6 @@ export function useEmployees() {
         query.refetch()
       })
       .subscribe()
-
     return () => { supabase.removeChannel(channel) }
   }, [query])
 
@@ -79,7 +77,7 @@ export function useUpdateEmployeeStatus() {
       if (error) throw error
     },
     onMutate: ({ id, status }) => {
-      updateLocal(id, status) // optimistic
+      updateLocal(id, status)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] })
@@ -93,7 +91,7 @@ export function useUpsertEmployee() {
     mutationFn: async (employee: Partial<Employee> & { warehouse_id: string }) => {
       const { data, error } = await supabase
         .from('employees')
-        .upsert({ ...employee, updated_at: new Date().toISOString() })
+        .upsert({ ...employee, updated_at: new Date().toISOString() }, { onConflict: 'id' })
         .select()
         .single()
       if (error) throw error
@@ -168,24 +166,6 @@ export function useUpsertForecast() {
     },
   })
 }
-          ...values,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'warehouse_id,forecast_date' })
-        .select()
-        .single()
-      if (error) throw error
-      return data
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['forecast'] })
-    },
-  })
-},
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['forecast'] })
-    },
-  })
-}
 
 // ---- Ops Snapshots ----
 export function useLatestOpsSnapshot() {
@@ -219,7 +199,6 @@ export function useLatestOpsSnapshot() {
         query.refetch()
       })
       .subscribe()
-
     return () => { supabase.removeChannel(channel) }
   }, [query])
 
@@ -322,7 +301,6 @@ export function useApproveBreak() {
   return useMutation({
     mutationFn: async ({ break_id, employee_id }: { break_id: string; employee_id: string }) => {
       const breakEnd = new Date(Date.now() + 30 * 60000).toISOString()
-
       const { error } = await supabase
         .from('break_requests')
         .update({
@@ -332,7 +310,6 @@ export function useApproveBreak() {
         })
         .eq('id', break_id)
       if (error) throw error
-
       await updateStatus.mutateAsync({ id: employee_id, status: 'break' })
     },
     onSuccess: () => {
@@ -390,7 +367,6 @@ export function useAlerts() {
         addAlert(payload.new as Alert)
       })
       .subscribe()
-
     return () => { supabase.removeChannel(channel) }
   }, [addAlert])
 
@@ -464,7 +440,6 @@ export function useSendCopilotMessage() {
       messages: { role: 'user' | 'assistant'; content: string }[]
       sessionId: string
     }) => {
-      // Build context for Claude
       const context = {
         timestamp: new Date().toISOString(),
         active_employees: employees.filter(e => e.current_status === 'working').length,
@@ -481,7 +456,7 @@ export function useSendCopilotMessage() {
       }
 
       const systemPrompt = `You are the AI Copilot for Warehouse Copilot, a real-time workforce allocation system.
-      
+
 You help warehouse supervisors make fast, smart decisions about:
 - Workforce allocation and redeployment
 - Break management and timing
@@ -492,14 +467,13 @@ Current warehouse state:
 ${JSON.stringify(context, null, 2)}
 
 Key metrics to reference:
-- Pressure Ratio: queue_depth / effective_capacity_per_hour. >1.5× = risk, >2.0× = critical
+- Pressure Ratio: queue_depth / effective_capacity_per_hour. >1.5x = risk, >2.0x = critical
 - TTE (Time-to-Empty): minutes until a queue clears at current staffing
 - SLA windows: Same Day cutoff 13:00, Due Date 19:00 (weekdays)
 
 Be concise, direct, and actionable. Use numbers. Give specific recommendations with employee names when possible.
 Never be vague. If you suggest a reallocation, name the specific employees and roles.`
 
-      // Call via Supabase Edge Function (keeps API key server-side)
       const edgeFnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/copilot`
       const response = await fetch(edgeFnUrl, {
         method: 'POST',
@@ -521,7 +495,6 @@ Never be vague. If you suggest a reallocation, name the specific employees and r
       const data = await response.json()
       const assistantMessage = data.content?.[0]?.text ?? 'No response'
 
-      // Save to DB
       await supabase.from('ai_conversations').insert([
         {
           warehouse_id: WAREHOUSE_ID,
@@ -546,7 +519,6 @@ Never be vague. If you suggest a reallocation, name the specific employees and r
 // ---- Apply Reallocation ----
 export function useApplyReallocation() {
   const queryClient = useQueryClient()
-  const updateStatus = useUpdateEmployeeStatus()
 
   return useMutation({
     mutationFn: async ({
@@ -558,7 +530,6 @@ export function useApplyReallocation() {
       from_role: EmployeeRole
       to_role: EmployeeRole
     }) => {
-      // Log the allocation
       const { error } = await supabase.from('workforce_allocations').insert({
         employee_id,
         warehouse_id: WAREHOUSE_ID,
@@ -568,7 +539,6 @@ export function useApplyReallocation() {
       })
       if (error) throw error
 
-      // Update employee primary role temporarily (redeployed status)
       await supabase
         .from('employees')
         .update({
@@ -583,3 +553,4 @@ export function useApplyReallocation() {
     },
   })
 }
+
