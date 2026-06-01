@@ -157,13 +157,24 @@ export function useUpsertForecast() {
   forecast_date: today,
   ...values,
   updated_at: new Date().toISOString(),
-}, { onConflict: 'warehouse_id,forecast_date' }),
-        })
+}, const { data, error } = await supabase
+        .from('daily_forecasts')
+        .upsert({
+          warehouse_id: WAREHOUSE_ID,
+          forecast_date: today,
+          ...values,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'warehouse_id,forecast_date' })
         .select()
         .single()
       if (error) throw error
       return data
     },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['forecast'] })
+    },
+  })
+},
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['forecast'] })
     },
