@@ -153,10 +153,11 @@ export function useUpsertForecast() {
       const { data, error } = await supabase
         .from('daily_forecasts')
         .upsert({
-          warehouse_id: WAREHOUSE_ID,
-          forecast_date: today,
-          ...values,
-          updated_at: new Date().toISOString(),
+  warehouse_id: WAREHOUSE_ID,
+  forecast_date: today,
+  ...values,
+  updated_at: new Date().toISOString(),
+}, { onConflict: 'warehouse_id,forecast_date' }),
         })
         .select()
         .single()
