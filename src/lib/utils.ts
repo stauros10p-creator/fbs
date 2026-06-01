@@ -33,7 +33,7 @@ export function initials(name: string): string {
 
 export function roleColor(role: string): string {
   const map: Record<string, string> = {
-    operator:    '#00ffa3',
+    operator:    '#22c55e',
     picker:      '#3b82f6',
     packer:      '#f97316',
     validator:   '#a78bfa',

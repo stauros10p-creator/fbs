@@ -47,7 +47,7 @@ export function DashboardPage() {
         subtitle="Real-time workforce allocation and SLA status"
         actions={
           <Link to="/ops" className="btn-primary flex items-center gap-2">
-            <span className="text-bg">⬡</span> Update Ops Snapshot
+            <span>⬡</span> Update Ops Snapshot
           </Link>
         }
       />
@@ -59,13 +59,13 @@ export function DashboardPage() {
             label="Active Workers"
             value={working}
             sub={`${onBreak} on break`}
-            color="text-green"
+            color="text-success"
           />
           <StatCard
             label="Pending Packing"
             value={latestOps?.pending_packing ?? '—'}
             sub={ttePacking !== null ? `TTE: ${formatTTE(ttePacking)}` : 'No snapshot'}
-            color={packerRC?.status === 'critical' ? 'text-red' : packerRC?.status === 'risk' ? 'text-orange' : 'text-cyan'}
+            color={packerRC?.status === 'critical' ? 'text-red' : packerRC?.status === 'risk' ? 'text-orange' : 'text-info'}
             urgent={packerRC?.status === 'critical'}
           />
           <StatCard
@@ -92,7 +92,7 @@ export function DashboardPage() {
             label="Alerts"
             value={unacked.length}
             sub={unacked.length > 0 ? 'Unacknowledged' : 'All clear'}
-            color={unacked.length > 0 ? 'text-red' : 'text-green'}
+            color={unacked.length > 0 ? 'text-red' : 'text-success'}
           />
         </div>
 

@@ -111,8 +111,8 @@ export function SchedulePage() {
                   onClick={() => setSelectedDate(day)}
                   className={cn(
                     'px-3 py-2 rounded text-xs font-semibold transition-all',
-                    isSelected ? 'bg-green text-bg'
-                    : isToday ? 'text-green border border-green/30'
+                    isSelected ? 'bg-success text-bg'
+                    : isToday ? 'text-success border border-success/30'
                     : 'text-muted hover:text-slate-200',
                   )}
                 >
@@ -194,7 +194,7 @@ export function SchedulePage() {
                 </tr>
               </thead>
               <tbody>
-                <tr className="text-green">
+                <tr className="text-success">
                   <td className="pr-6">PA001</td>
                   <td className="pr-6">2026-06-02</td>
                   <td className="pr-6">08:00</td>

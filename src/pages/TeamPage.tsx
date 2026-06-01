@@ -75,12 +75,12 @@ export function TeamPage() {
         {/* Status summary */}
         <div className="grid grid-cols-6 gap-3 mb-6">
           {[
-            { status: 'working', color: 'text-green', label: 'Working' },
+            { status: 'working', color: 'text-success', label: 'Working' },
             { status: 'break',   color: 'text-yellow', label: 'Break' },
             { status: 'sick',    color: 'text-red',    label: 'Sick' },
             { status: 'vacation',color: 'text-blue',   label: 'Vacation' },
             { status: 'off',     color: 'text-muted',  label: 'Off' },
-            { status: 'redeployed', color: 'text-cyan', label: 'Redeployed' },
+            { status: 'redeployed', color: 'text-info', label: 'Redeployed' },
           ].map(({ status, color, label }) => (
             <div key={status} className="panel text-center cursor-pointer hover:border-border2" onClick={() => setTab(status as EmployeeStatus)}>
               <div className={cn('font-mono text-2xl font-bold', color)}>
@@ -101,7 +101,7 @@ export function TeamPage() {
                 onClick={() => setTab(key)}
                 className={cn(
                   'px-3 py-1 rounded text-xs font-semibold transition-all',
-                  tab === key ? 'bg-green text-bg' : 'text-muted hover:text-slate-200',
+                  tab === key ? 'bg-success text-bg' : 'text-muted hover:text-slate-200',
                 )}
               >
                 {label} ({key === 'all' ? employees.length : employees.filter(e => e.current_status === key).length})
@@ -187,7 +187,7 @@ export function TeamPage() {
                         {[1, 2, 3, 4, 5].map(n => (
                           <div
                             key={n}
-                            className={cn('w-2 h-2 rounded-sm', parseInt(emp.skill_level) >= n ? 'bg-green' : 'bg-surface3')}
+                            className={cn('w-2 h-2 rounded-sm', parseInt(emp.skill_level) >= n ? 'bg-success' : 'bg-surface3')}
                           />
                         ))}
                       </div>

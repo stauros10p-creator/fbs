@@ -10,8 +10,8 @@ export function OpsSnapshotPanel() {
 
   if (!ops) {
     return (
-      <div className="panel border-cyan/20 bg-cyan/5">
-        <div className="text-xs font-bold tracking-widest text-cyan uppercase mb-3 pb-2 border-b border-border">
+      <div className="panel border-info/20 bg-info/5">
+        <div className="text-xs font-bold tracking-widest text-info uppercase mb-3 pb-2 border-b border-border">
           ⬡ Ops Snapshot
         </div>
         <p className="text-sm text-muted mb-4">No snapshot recorded yet today.</p>
@@ -28,9 +28,9 @@ export function OpsSnapshotPanel() {
   const total = ops.remaining_due_date + ops.remaining_same_day + ops.remaining_intraday || 1
 
   return (
-    <div className={cn('panel', age.isStale ? 'border-yellow/30 bg-yellow/5' : 'border-cyan/20 bg-cyan/5')}>
+    <div className={cn('panel', age.isStale ? 'border-yellow/30 bg-yellow/5' : 'border-info/20 bg-info/5')}>
       <div className="flex items-center justify-between mb-3 pb-2 border-b border-border">
-        <div className="text-xs font-bold tracking-widest text-cyan uppercase">⬡ Ops Snapshot</div>
+        <div className="text-xs font-bold tracking-widest text-info uppercase">⬡ Ops Snapshot</div>
         <div className={cn('text-xs font-mono', age.isStale ? 'text-yellow' : 'text-muted')}>
           {age.label}
         </div>
@@ -40,7 +40,7 @@ export function OpsSnapshotPanel() {
       <div className="space-y-2 mb-4">
         {[
           { label: 'Pending Picking', value: ops.pending_picking, tte: pickerRC?.tte_minutes, color: 'text-blue' },
-          { label: 'Pending Packing', value: ops.pending_packing, tte: packerRC?.tte_minutes, color: packerRC?.status === 'critical' ? 'text-red' : packerRC?.status === 'risk' ? 'text-orange' : 'text-cyan', critical: packerRC?.status === 'critical' },
+          { label: 'Pending Packing', value: ops.pending_packing, tte: packerRC?.tte_minutes, color: packerRC?.status === 'critical' ? 'text-red' : packerRC?.status === 'risk' ? 'text-orange' : 'text-info', critical: packerRC?.status === 'critical' },
           { label: 'Pending Sorting', value: ops.pending_sorting, tte: sorterRC?.tte_minutes, color: 'text-purple-400' },
         ].map(({ label, value, tte, color, critical }) => (
           <div
@@ -54,7 +54,7 @@ export function OpsSnapshotPanel() {
             <div className="text-right">
               <div className={cn('font-mono text-sm font-bold', color)}>{value.toLocaleString()}</div>
               {tte !== null && tte !== undefined && (
-                <div className={cn('font-mono text-[10px]', tte < 30 ? 'text-green' : tte < 60 ? 'text-yellow' : 'text-red')}>
+                <div className={cn('font-mono text-[10px]', tte < 30 ? 'text-success' : tte < 60 ? 'text-yellow' : 'text-red')}>
                   TTE {formatTTE(tte)}
                 </div>
               )}
@@ -67,7 +67,7 @@ export function OpsSnapshotPanel() {
       <div className="space-y-2.5 mb-4">
         <div className="text-xs font-semibold text-muted uppercase tracking-wider mb-1">Remaining by SLA</div>
         {[
-          { label: 'Due Date → 19:00', value: ops.remaining_due_date, color: 'bg-green' },
+          { label: 'Due Date → 19:00', value: ops.remaining_due_date, color: 'bg-success' },
           { label: 'Same Day → 13:00', value: ops.remaining_same_day, color: 'bg-orange', urgent: true },
           { label: 'Intraday → 24:00', value: ops.remaining_intraday, color: 'bg-blue' },
         ].map(({ label, value, color, urgent }) => (

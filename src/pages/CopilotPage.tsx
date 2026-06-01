@@ -103,8 +103,8 @@ export function CopilotPage() {
                 className={cn('flex gap-3 animate-slideIn', msg.role === 'user' ? 'justify-end' : 'justify-start')}
               >
                 {msg.role === 'assistant' && (
-                  <div className="w-8 h-8 rounded-full bg-green/10 border border-green/25 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Bot className="w-4 h-4 text-green" />
+                  <div className="w-8 h-8 rounded-full bg-success/10 border border-success/25 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Bot className="w-4 h-4 text-success" />
                   </div>
                 )}
 
@@ -112,12 +112,12 @@ export function CopilotPage() {
                   'max-w-[75%] rounded-xl px-4 py-3 text-sm leading-relaxed',
                   msg.role === 'user'
                     ? 'bg-surface2 border border-border2 text-slate-200'
-                    : 'bg-green/5 border border-green/15 text-slate-200',
+                    : 'bg-success/5 border border-success/15 text-slate-200',
                 )}>
                   <div className="whitespace-pre-wrap">{msg.content}</div>
                   <div className={cn(
                     'text-[10px] mt-1.5 font-mono',
-                    msg.role === 'user' ? 'text-muted text-right' : 'text-green/50',
+                    msg.role === 'user' ? 'text-muted text-right' : 'text-success/50',
                   )}>
                     {msg.timestamp.toLocaleTimeString('el-GR', { hour: '2-digit', minute: '2-digit' })}
                   </div>
@@ -133,15 +133,15 @@ export function CopilotPage() {
 
             {sendMessage.isPending && (
               <div className="flex gap-3">
-                <div className="w-8 h-8 rounded-full bg-green/10 border border-green/25 flex items-center justify-center">
-                  <Bot className="w-4 h-4 text-green" />
+                <div className="w-8 h-8 rounded-full bg-success/10 border border-success/25 flex items-center justify-center">
+                  <Bot className="w-4 h-4 text-success" />
                 </div>
-                <div className="bg-green/5 border border-green/15 rounded-xl px-4 py-3">
+                <div className="bg-success/5 border border-success/15 rounded-xl px-4 py-3">
                   <div className="flex gap-1">
                     {[0, 1, 2].map(i => (
                       <div
                         key={i}
-                        className="w-1.5 h-1.5 bg-green rounded-full animate-bounce"
+                        className="w-1.5 h-1.5 bg-success rounded-full animate-bounce"
                         style={{ animationDelay: `${i * 0.15}s` }}
                       />
                     ))}
@@ -209,13 +209,13 @@ export function CopilotPage() {
               <div className="space-y-2 text-xs font-mono">
                 <div className="flex justify-between">
                   <span className="text-muted">Bottleneck</span>
-                  <span className={engineResult.bottleneck_role ? 'text-orange' : 'text-green'}>
+                  <span className={engineResult.bottleneck_role ? 'text-orange' : 'text-success'}>
                     {engineResult.bottleneck_role ?? 'none'}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted">Overall Risk</span>
-                  <span className={engineResult.overall_risk > 0.6 ? 'text-red' : engineResult.overall_risk > 0.3 ? 'text-yellow' : 'text-green'}>
+                  <span className={engineResult.overall_risk > 0.6 ? 'text-red' : engineResult.overall_risk > 0.3 ? 'text-yellow' : 'text-success'}>
                     {Math.round(engineResult.overall_risk * 100)}%
                   </span>
                 </div>
@@ -224,14 +224,14 @@ export function CopilotPage() {
                   .map(r => (
                     <div key={r.role} className="flex justify-between">
                       <span className="text-muted capitalize">{r.role} press.</span>
-                      <span className={r.pressure_ratio! > 1.5 ? 'text-red' : r.pressure_ratio! > 1.0 ? 'text-orange' : r.pressure_ratio! > 0.5 ? 'text-yellow' : 'text-green'}>
+                      <span className={r.pressure_ratio! > 1.5 ? 'text-red' : r.pressure_ratio! > 1.0 ? 'text-orange' : r.pressure_ratio! > 0.5 ? 'text-yellow' : 'text-success'}>
                         {r.pressure_ratio?.toFixed(2)}×
                       </span>
                     </div>
                   ))}
                 <div className="flex justify-between">
                   <span className="text-muted">Suggestions</span>
-                  <span className="text-cyan">{engineResult.suggestions.length}</span>
+                  <span className="text-info">{engineResult.suggestions.length}</span>
                 </div>
               </div>
             ) : (

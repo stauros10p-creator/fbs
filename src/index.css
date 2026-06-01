@@ -2,64 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
 @layer base {
-  * {
-    box-sizing: border-box;
-  }
+  * { box-sizing: border-box; }
 
   body {
     @apply bg-bg text-slate-200;
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Inter', sans-serif;
     -webkit-font-smoothing: antialiased;
   }
 
-  ::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
-  }
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  ::-webkit-scrollbar-thumb {
-    @apply bg-border2 rounded-full;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    @apply bg-muted;
-  }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-border2 rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-muted; }
 }
 
 @layer components {
   .btn-primary {
-    @apply bg-green text-bg font-bold text-xs tracking-wide px-4 py-2 rounded transition-all hover:brightness-110 active:scale-95;
+    @apply bg-accent text-white font-semibold text-xs tracking-wide px-4 py-2 rounded-md transition-all hover:bg-accent-light active:scale-95 shadow-sm;
   }
   .btn-secondary {
-    @apply bg-surface2 border border-border2 text-text2 text-xs font-medium px-4 py-2 rounded transition-all hover:border-border hover:text-slate-200 active:scale-95;
+    @apply bg-surface2 border border-border2 text-text2 text-xs font-medium px-4 py-2 rounded-md transition-all hover:border-border hover:text-slate-200 active:scale-95;
   }
   .btn-danger {
-    @apply bg-red/10 border border-red/30 text-red text-xs font-medium px-4 py-2 rounded transition-all hover:bg-red/20 active:scale-95;
+    @apply bg-danger/10 border border-danger/30 text-danger text-xs font-medium px-4 py-2 rounded-md transition-all hover:bg-danger/20 active:scale-95;
   }
-  .card {
-    @apply bg-surface border border-border rounded-lg;
-  }
-  .panel {
-    @apply bg-surface2 border border-border rounded-lg p-4;
-  }
+  .card  { @apply bg-surface border border-border rounded-xl; }
+  .panel { @apply bg-surface2 border border-border rounded-xl p-4; }
   .input {
-    @apply bg-surface3 border border-border2 rounded px-3 py-2 text-sm text-slate-200 placeholder-muted focus:outline-none focus:border-green/50 transition-colors w-full;
+    @apply bg-surface3 border border-border2 rounded-md px-3 py-2 text-sm text-slate-200 placeholder-muted focus:outline-none focus:border-accent/60 focus:ring-1 focus:ring-accent/20 transition-all w-full;
   }
-  .label {
-    @apply text-xs font-semibold tracking-wider text-muted uppercase;
-  }
-  .mono {
-    font-family: 'Space Mono', monospace;
-  }
-}
-
-/* Animations */
-.animate-slideIn {
-  animation: slideIn 0.2s ease-out;
-}
-@keyframes slideIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  .label { @apply text-xs font-semibold tracking-wide text-muted uppercase; }
+  .mono  { font-family: 'IBM Plex Mono', monospace; }
 }

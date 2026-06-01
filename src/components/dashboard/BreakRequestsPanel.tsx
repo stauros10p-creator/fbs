@@ -82,7 +82,7 @@ export function BreakRequestsPanel({ requests }: BreakRequestsPanelProps) {
               )}
             >
               {/* Avatar */}
-              <div className="w-8 h-8 rounded-full bg-surface2 border border-border flex items-center justify-center text-xs font-bold text-green font-mono flex-shrink-0">
+              <div className="w-8 h-8 rounded-full bg-surface2 border border-border flex items-center justify-center text-xs font-bold text-success font-mono flex-shrink-0">
                 {initials(req.employee?.full_name ?? '?')}
               </div>
 
@@ -94,7 +94,7 @@ export function BreakRequestsPanel({ requests }: BreakRequestsPanelProps) {
                 {safety && (
                   <div className={cn(
                     'text-xs mt-0.5',
-                    safety.status === 'supervisor_review' ? 'text-red' : safety.status === 'caution' ? 'text-yellow' : 'text-green',
+                    safety.status === 'supervisor_review' ? 'text-red' : safety.status === 'caution' ? 'text-yellow' : 'text-success',
                   )}>
                     {safety.status === 'auto_approve' ? '✓ Safe to approve'
                      : safety.status === 'caution' ? '⚠ Approve with caution'
@@ -107,7 +107,7 @@ export function BreakRequestsPanel({ requests }: BreakRequestsPanelProps) {
                 <button
                   onClick={() => handleApprove(req)}
                   disabled={approve.isPending}
-                  className="w-8 h-8 rounded-full bg-green/10 border border-green/30 text-green hover:bg-green/20 transition-colors flex items-center justify-center"
+                  className="w-8 h-8 rounded-full bg-success/10 border border-success/30 text-success hover:bg-success/20 transition-colors flex items-center justify-center"
                   title="Approve"
                 >
                   <Check className="w-3.5 h-3.5" />

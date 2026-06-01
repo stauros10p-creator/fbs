@@ -362,14 +362,14 @@ export function formatPressure(ratio: number | null): string {
 
 export function pressureColor(ratio: number | null): string {
   if (ratio === null) return 'text-muted'
-  if (ratio < 0.5) return 'text-green'
+  if (ratio < 0.5) return 'text-success'
   if (ratio < 1.0) return 'text-yellow'
   if (ratio < 1.5) return 'text-orange'
   return 'text-red'
 }
 
 export function riskLabel(score: number): { label: string; color: string } {
-  if (score < 0.3) return { label: 'Low', color: 'text-green' }
+  if (score < 0.3) return { label: 'Low', color: 'text-success' }
   if (score < 0.6) return { label: 'Medium', color: 'text-yellow' }
   if (score < 0.8) return { label: 'High', color: 'text-orange' }
   return { label: 'Critical', color: 'text-red' }

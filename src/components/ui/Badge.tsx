@@ -7,12 +7,12 @@ interface BadgeProps {
 }
 
 const VARIANTS = {
-  green:  'bg-green/10 text-green border-green/20',
+  green:  'bg-success/10 text-success border-success/20',
   blue:   'bg-blue/10 text-blue border-blue/20',
   orange: 'bg-orange/10 text-orange border-orange/20',
   red:    'bg-red/10 text-red border-red/20',
   yellow: 'bg-yellow/10 text-yellow border-yellow/20',
-  cyan:   'bg-cyan/10 text-cyan border-cyan/20',
+  cyan:   'bg-info/10 text-info border-info/20',
   purple: 'bg-purple-400/10 text-purple-400 border-purple-400/20',
   muted:  'bg-muted/10 text-muted border-muted/20',
 }

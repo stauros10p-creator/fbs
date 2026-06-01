@@ -5,7 +5,7 @@ import { ROLE_CONFIG } from '@/types'
 import { PressureBadge } from '@/components/ui/Badge'
 
 const STATUS_STYLES = {
-  ok:       { label: 'OK',       cls: 'bg-green/10 text-green border-green/20' },
+  ok:       { label: 'OK',       cls: 'bg-success/10 text-success border-success/20' },
   watch:    { label: 'WATCH',    cls: 'bg-yellow/10 text-yellow border-yellow/20' },
   risk:     { label: 'RISK',     cls: 'bg-orange/10 text-orange border-orange/20' },
   critical: { label: 'CRITICAL', cls: 'bg-red/10 text-red border-red/20' },
@@ -27,7 +27,7 @@ export function AllocationTable({ roleCapacity }: AllocationTableProps) {
 
   return (
     <div className="panel">
-      <div className="text-xs font-bold tracking-widest text-green uppercase mb-4 pb-2 border-b border-border flex items-center gap-2">
+      <div className="text-xs font-bold tracking-widest text-success uppercase mb-4 pb-2 border-b border-border flex items-center gap-2">
         ▣ Role Allocation — Live Pressure View
       </div>
 
@@ -86,7 +86,7 @@ export function AllocationTable({ roleCapacity }: AllocationTableProps) {
                   {/* Queue */}
                   <td className="py-3 pr-4">
                     {rc.queue_depth !== null ? (
-                      <span className="font-mono text-cyan">{rc.queue_depth.toLocaleString()}</span>
+                      <span className="font-mono text-info">{rc.queue_depth.toLocaleString()}</span>
                     ) : (
                       <span className="text-muted font-mono">—</span>
                     )}
@@ -108,7 +108,7 @@ export function AllocationTable({ roleCapacity }: AllocationTableProps) {
                     <span className={cn(
                       'font-mono text-sm',
                       rc.tte_minutes !== null
-                        ? rc.tte_minutes < 30 ? 'text-green'
+                        ? rc.tte_minutes < 30 ? 'text-success'
                         : rc.tte_minutes < 60 ? 'text-yellow'
                         : rc.tte_minutes < 90 ? 'text-orange'
                         : 'text-red'

@@ -20,7 +20,7 @@ const FIELDS: FieldConfig[] = [
   { key: 'pending_packing',    label: 'Pending Packing',      description: 'Orders waiting at pack stations',    color: 'text-orange',    role: 'packer' },
   { key: 'pending_sorting',    label: 'Pending Sorting',      description: 'Items on sorting conveyor',          color: 'text-purple-400', role: 'sorter' },
   { key: 'backlog_orders',     label: 'Backlog Orders',       description: 'Carried over / not yet started',    color: 'text-yellow' },
-  { key: 'remaining_due_date', label: 'Remaining Due Date',   description: 'Cutoff 19:00 — orders not dispatched', color: 'text-green' },
+  { key: 'remaining_due_date', label: 'Remaining Due Date',   description: 'Cutoff 19:00 — orders not dispatched', color: 'text-success' },
   { key: 'remaining_same_day', label: 'Remaining Same Day',   description: 'Cutoff 13:00 — HIGHEST PRIORITY',   color: 'text-red' },
   { key: 'remaining_intraday', label: 'Remaining Intraday',   description: 'Cutoff 24:00 — lowest priority',    color: 'text-blue' },
 ]
@@ -118,7 +118,7 @@ export function OpsSnapshotPage() {
           <div className="col-span-2 space-y-3">
             {/* Queue section */}
             <div className="panel">
-              <div className="text-xs font-bold tracking-widest text-cyan uppercase mb-4 pb-2 border-b border-border">
+              <div className="text-xs font-bold tracking-widest text-info uppercase mb-4 pb-2 border-b border-border">
                 ⬡ Station Queue Depths
               </div>
               <div className="space-y-1">
@@ -204,12 +204,12 @@ export function OpsSnapshotPage() {
 
               {/* Algorithm preview */}
               {engineResult && (
-                <div className="bg-green/5 border border-green/15 rounded-lg p-3 mb-4 text-xs text-green/80 leading-relaxed">
-                  <strong className="text-green block mb-1">Algorithm Preview</strong>
-                  Bottleneck: <span className="font-semibold text-green">
+                <div className="bg-success/5 border border-success/15 rounded-lg p-3 mb-4 text-xs text-success/80 leading-relaxed">
+                  <strong className="text-success block mb-1">Algorithm Preview</strong>
+                  Bottleneck: <span className="font-semibold text-success">
                     {engineResult.bottleneck_role ?? 'none'}
                   </span> ·
-                  Overall risk: <span className={cn('font-semibold', engineResult.overall_risk > 0.6 ? 'text-red' : engineResult.overall_risk > 0.3 ? 'text-yellow' : 'text-green')}>
+                  Overall risk: <span className={cn('font-semibold', engineResult.overall_risk > 0.6 ? 'text-red' : engineResult.overall_risk > 0.3 ? 'text-yellow' : 'text-success')}>
                     {Math.round(engineResult.overall_risk * 100)}%
                   </span> ·
                   {engineResult.suggestions.length} reallocation{engineResult.suggestions.length !== 1 ? 's' : ''} suggested
@@ -240,7 +240,7 @@ export function OpsSnapshotPage() {
                       key={snap.id}
                       className={cn(
                         'p-3 rounded-lg border cursor-pointer hover:border-border2 transition-colors',
-                        i === 0 ? 'border-cyan/25 bg-cyan/5' : 'border-border bg-surface3/30',
+                        i === 0 ? 'border-info/25 bg-info/5' : 'border-border bg-surface3/30',
                       )}
                       onClick={() => setForm({
                         pending_picking: snap.pending_picking,
@@ -257,7 +257,7 @@ export function OpsSnapshotPage() {
                           {formatTime(snap.recorded_at)}
                         </span>
                         {i === 0 && (
-                          <span className="text-[9px] font-bold font-mono text-cyan tracking-wider">LATEST</span>
+                          <span className="text-[9px] font-bold font-mono text-info tracking-wider">LATEST</span>
                         )}
                         {age.isStale && i === 0 && (
                           <span className="text-[9px] font-bold font-mono text-yellow tracking-wider">STALE</span>

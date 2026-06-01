@@ -213,7 +213,7 @@ export interface RoleConfig {
 }
 
 export const ROLE_CONFIG: Record<EmployeeRole, RoleConfig> = {
-  operator:    { label: 'Operator',    short: 'OP', color: '#00ffa3', bgColor: 'bg-green-dim',  borderColor: 'border-green/30',  textColor: 'text-green' },
+  operator:    { label: 'Operator',    short: 'OP', color: '#22c55e', bgColor: 'bg-success-dim',  borderColor: 'border-success/30',  textColor: 'text-success' },
   picker:      { label: 'Picker',      short: 'PK', color: '#3b82f6', bgColor: 'bg-blue-dim',   borderColor: 'border-blue/30',   textColor: 'text-blue' },
   packer:      { label: 'Packer',      short: 'PA', color: '#f97316', bgColor: 'bg-orange-dim', borderColor: 'border-orange/30', textColor: 'text-orange' },
   validator:   { label: 'Validator',   short: 'VA', color: '#a78bfa', bgColor: 'bg-purple-300/10', borderColor: 'border-purple-400/30', textColor: 'text-purple-400' },
@@ -222,12 +222,12 @@ export const ROLE_CONFIG: Record<EmployeeRole, RoleConfig> = {
 }
 
 export const STATUS_CONFIG: Record<EmployeeStatus, { label: string; color: string; dot: string }> = {
-  working:    { label: 'Working',    color: 'text-green',   dot: 'bg-green' },
-  break:      { label: 'Break',      color: 'text-yellow',  dot: 'bg-yellow' },
-  sick:       { label: 'Sick',       color: 'text-red',     dot: 'bg-red' },
-  vacation:   { label: 'Vacation',   color: 'text-blue',    dot: 'bg-blue' },
-  off:        { label: 'Off',        color: 'text-muted',   dot: 'bg-muted' },
-  redeployed: { label: 'Redeployed', color: 'text-cyan',    dot: 'bg-cyan' },
+  working:    { label: 'Working',    color: 'text-success',      dot: 'bg-success' },
+  break:      { label: 'Break',      color: 'text-warning',      dot: 'bg-warning' },
+  sick:       { label: 'Sick',       color: 'text-danger',       dot: 'bg-danger' },
+  vacation:   { label: 'Vacation',   color: 'text-accent',       dot: 'bg-accent' },
+  off:        { label: 'Off',        color: 'text-muted',        dot: 'bg-muted' },
+  redeployed: { label: 'Redeployed', color: 'text-info',         dot: 'bg-info' },
 }
 
 export const SKILL_LABELS: Record<SkillLevel, string> = {

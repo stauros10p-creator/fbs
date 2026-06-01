@@ -44,8 +44,8 @@ export function ForecastPage() {
       key: 'due_date_orders',
       label: 'Due Date Orders',
       sub: 'Cutoff → 19:00',
-      color: 'text-green',
-      border: 'border-green/20',
+      color: 'text-success',
+      border: 'border-success/20',
     },
     {
       key: 'same_day_orders',
@@ -120,7 +120,7 @@ export function ForecastPage() {
           {/* Required staffing output */}
           <div className="space-y-4">
             <div className="panel">
-              <div className="text-xs font-bold tracking-widest text-green uppercase mb-4 pb-2 border-b border-border">
+              <div className="text-xs font-bold tracking-widest text-success uppercase mb-4 pb-2 border-b border-border">
                 Required Staffing (Calculated)
               </div>
 
@@ -136,10 +136,10 @@ export function ForecastPage() {
                             {rc.active_count} active
                           </span>
                           <span className="text-xs text-muted">/</span>
-                          <span className={cn('font-mono text-sm font-bold', ok ? 'text-green' : 'text-red')}>
+                          <span className={cn('font-mono text-sm font-bold', ok ? 'text-success' : 'text-red')}>
                             {rc.required_count} needed
                           </span>
-                          <span className={cn('font-mono text-xs', ok ? 'text-green' : 'text-red')}>
+                          <span className={cn('font-mono text-xs', ok ? 'text-success' : 'text-red')}>
                             {ok ? '✓' : `−${Math.abs(rc.gap)}`}
                           </span>
                         </div>
@@ -168,8 +168,8 @@ export function ForecastPage() {
                   ] as const).map(({ type, label, cutoff }) => {
                     const risk = engineResult.sla_risk[type]
                     const pct = Math.round(risk * 100)
-                    const color = pct < 30 ? 'bg-green' : pct < 60 ? 'bg-yellow' : pct < 80 ? 'bg-orange' : 'bg-red'
-                    const textColor = pct < 30 ? 'text-green' : pct < 60 ? 'text-yellow' : pct < 80 ? 'text-orange' : 'text-red'
+                    const color = pct < 30 ? 'bg-success' : pct < 60 ? 'bg-yellow' : pct < 80 ? 'bg-orange' : 'bg-red'
+                    const textColor = pct < 30 ? 'text-success' : pct < 60 ? 'text-yellow' : pct < 80 ? 'text-orange' : 'text-red'
                     return (
                       <div key={type}>
                         <div className="flex justify-between text-xs mb-1.5">

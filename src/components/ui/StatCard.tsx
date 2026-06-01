@@ -9,7 +9,7 @@ interface StatCardProps {
   urgent?: boolean
 }
 
-export function StatCard({ label, value, sub, color = 'text-green', className, urgent }: StatCardProps) {
+export function StatCard({ label, value, sub, color = 'text-success', className, urgent }: StatCardProps) {
   return (
     <div className={cn(
       'bg-surface2 border border-border rounded-lg p-4 flex flex-col gap-1',

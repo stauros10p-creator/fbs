@@ -55,9 +55,9 @@ export function SuggestionBar({ suggestions }: SuggestionBarProps) {
                   <span>{ROLE_CONFIG[s.from_role].label}</span>
                   <ChevronRight className="w-3 h-3 text-orange" />
                   <span className="text-orange">{ROLE_CONFIG[s.to_role].label}</span>
-                  <span className="text-green">+{s.capacity_gain}/hr</span>
+                  <span className="text-success">+{s.capacity_gain}/hr</span>
                   {applied.includes(s.employee.id) && (
-                    <span className="text-green font-bold flex items-center gap-1">
+                    <span className="text-success font-bold flex items-center gap-1">
                       <Check className="w-3 h-3" /> Applied
                     </span>
                   )}
