@@ -418,7 +418,7 @@ export function DashboardPage() {
 
       {/* COPILOT FAB */}
       <Link to="/copilot" style={{ zIndex:100,
-        position:'fixed',bottom:24,right:24,zIndex:50,
+        position:'fixed',bottom:24,right:24,
         background:'#3b82f6',color:'white',
         padding:'10px 18px',borderRadius:50,
         fontSize:12,fontWeight:700,
