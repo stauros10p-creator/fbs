@@ -16,14 +16,18 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/ops" element={<OpsSnapshotPage />} />
             <Route path="/team" element={<TeamPage />} />
             <Route path="/schedule" element={<SchedulePage />} />
             <Route path="/forecast" element={<ForecastPage />} />
-            <Route path="/ops" element={<OpsSnapshotPage />} />
             <Route path="/copilot" element={<CopilotPage />} />
+            {/* Catch-all redirects */}
+            <Route path="/settings" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </Layout>
       </DataLoader>
     </BrowserRouter>
   )
 }
+

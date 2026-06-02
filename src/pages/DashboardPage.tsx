@@ -135,7 +135,7 @@ export function DashboardPage() {
           <div style={{ border:'1px solid #e2e6ef',borderRadius:8,padding:'6px 14px',display:'flex',alignItems:'center',gap:8,fontSize:13,color:'#6b7280' }}>
             Τώρα <strong style={{ fontFamily:'monospace', color:'#1a1f36', fontSize:14 }}>{timeStr}</strong>
           </div>
-          <Link to="/ops" style={{ background:'#3b82f6',color:'white',padding:'8px 16px',borderRadius:8,fontSize:13,fontWeight:600,textDecoration:'none' }}>
+          <Link to="/ops" style={{ background:'#3b82f6',color:'white',padding:'8px 16px',borderRadius:8,fontSize:13,fontWeight:600,textDecoration:'none',display:'flex',alignItems:'center',gap:6 }}>
             + Νέο Διάλειμμα
           </Link>
         </div>
@@ -219,7 +219,7 @@ export function DashboardPage() {
                 </div>
               )
             })}
-            <div style={{ textAlign:'center',padding:'8px',fontSize:11,color:'#3b82f6',fontWeight:500,borderTop:'1px solid #f1f5f9' }}>Δείτε όλα τα διαλείμματα →</div>
+            <Link to="/team" style={{ display:'block',textAlign:'center',padding:'8px',fontSize:11,color:'#3b82f6',fontWeight:500,borderTop:'1px solid #f1f5f9',textDecoration:'none' }}>Δείτε όλα τα διαλείμματα →</Link>
           </div>
         </div>
 
@@ -352,7 +352,7 @@ export function DashboardPage() {
                     <div style={{ fontSize:12,fontWeight:700,color:'#22c55e',marginBottom:2 }}>Σύστημα έτοιμο</div>
                     <div style={{ fontSize:11,color:'#6b7280',lineHeight:1.4 }}>Ενημέρωσε το Ops Snapshot για AI προτάσεις</div>
                   </div>
-                  <Link to="/ops"><button style={{ background:'#3b82f6',color:'white',border:'none',padding:'5px 12px',borderRadius:7,fontSize:11,fontWeight:700,cursor:'pointer' }}>Snapshot</button></Link>
+                  <Link to="/ops" style={{ background:'#3b82f6',color:'white',padding:'5px 12px',borderRadius:7,fontSize:11,fontWeight:700,textDecoration:'none' }}>Snapshot</Link>
                 </div>
                 <div style={{ display:'flex',alignItems:'flex-start',gap:10,padding:'11px 14px' }}>
                   <div style={{ width:34,height:34,borderRadius:10,background:'#eff6ff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>ℹ️</div>
@@ -417,7 +417,7 @@ export function DashboardPage() {
       </div>
 
       {/* COPILOT FAB */}
-      <Link to="/copilot" style={{
+      <Link to="/copilot" style={{ zIndex:100,
         position:'fixed',bottom:24,right:24,zIndex:50,
         background:'#3b82f6',color:'white',
         padding:'10px 18px',borderRadius:50,
