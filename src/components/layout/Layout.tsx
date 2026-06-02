@@ -1,13 +1,13 @@
+import { useState, useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
 
 const NAV = [
   { to: '/dashboard', icon: '⊞', label: 'Dashboard' },
   { to: '/team',      icon: '👥', label: 'Employees' },
   { to: '/ops',       icon: '🎯', label: 'Roles & Skills' },
   { to: '/schedule',  icon: '📅', label: 'Daily Planning' },
-  { to: '/forecast',  icon: '⏱', label: 'Live Allocation' },
+  { to: '/forecast',  icon: '⏱',  label: 'Live Allocation' },
   { to: '/breaks',    icon: '☕', label: 'Breaks', badge: true },
   { to: '/workload',  icon: '📦', label: 'Workload' },
   { to: '/reports',   icon: '📊', label: 'Reports' },
@@ -20,63 +20,75 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const unacked = alerts.filter(a => !a.acknowledged_at).length
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: '#f0f2f7' }}>
-
-      {/* ── SIDEBAR ── */}
-      <aside className="w-48 flex-shrink-0 flex flex-col" style={{ background: '#1e2433' }}>
-
+    <div style={{ display:'flex', height:'100vh', overflow:'hidden', background:'#f0f2f7' }}>
+      {/* SIDEBAR */}
+      <aside style={{
+        width: 200, flexShrink: 0, display: 'flex', flexDirection: 'column',
+        background: '#1e2433', fontFamily: 'Inter, sans-serif',
+      }}>
         {/* Logo */}
-        <div className="px-4 py-5 border-b" style={{ borderColor: 'rgba(255,255,255,0.07)' }}>
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-lg bg-blue flex items-center justify-center text-white font-bold text-sm flex-shrink-0">FB</div>
+        <div style={{ padding: '18px 16px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: 9, background: '#3b82f6',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'white', fontWeight: 800, fontSize: 14, flexShrink: 0,
+            }}>FB</div>
             <div>
-              <div className="text-white font-bold text-sm leading-tight">Warehouse</div>
-              <div className="text-white font-bold text-sm leading-tight">Copilot</div>
+              <div style={{ color: 'white', fontWeight: 700, fontSize: 13, lineHeight: 1.3 }}>Warehouse</div>
+              <div style={{ color: 'white', fontWeight: 700, fontSize: 13, lineHeight: 1.3 }}>Copilot</div>
             </div>
           </div>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
+        <nav style={{ flex: 1, padding: '10px 8px', overflowY: 'auto' }}>
           {NAV.map(({ to, icon, label, badge }) => (
-            <NavLink
-              key={to}
-              to={to}
-              className={({ isActive }) => cn(
-                'flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all',
-                isActive
-                  ? 'bg-blue text-white font-semibold'
-                  : 'text-white/55 hover:bg-white/10 hover:text-white/90',
-              )}
-            >
-              <span className="text-base w-5 text-center flex-shrink-0">{icon}</span>
-              <span className="flex-1">{label}</span>
+            <NavLink key={to} to={to} style={({ isActive }) => ({
+              display: 'flex', alignItems: 'center', gap: 9,
+              padding: '9px 10px', borderRadius: 8, marginBottom: 2,
+              fontSize: 13, fontWeight: isActive ? 600 : 500,
+              color: isActive ? 'white' : 'rgba(255,255,255,0.55)',
+              background: isActive ? '#3b82f6' : 'transparent',
+              textDecoration: 'none', transition: 'all 0.15s',
+            })}>
+              <span style={{ fontSize: 15, width: 20, textAlign: 'center' }}>{icon}</span>
+              <span style={{ flex: 1 }}>{label}</span>
               {badge && unacked > 0 && (
-                <span className="bg-red text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
-                  {unacked}
-                </span>
+                <span style={{
+                  background: '#ef4444', color: 'white', fontSize: 10,
+                  fontWeight: 700, padding: '1px 6px', borderRadius: 10,
+                }}>{unacked}</span>
               )}
             </NavLink>
           ))}
         </nav>
 
         {/* User */}
-        <div className="p-4 border-t" style={{ borderColor: 'rgba(255,255,255,0.07)' }}>
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue to-purple flex items-center justify-center text-white font-bold text-xs flex-shrink-0">ΣΤ</div>
+        <div style={{ padding: '14px 16px', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+            <div style={{
+              width: 34, height: 34, borderRadius: '50%',
+              background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'white', fontWeight: 700, fontSize: 12, flexShrink: 0,
+            }}>ΣΤ</div>
             <div>
-              <div className="text-white font-semibold text-xs">Team Leader</div>
-              <div className="text-white/40 text-[10px] flex items-center gap-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-green animate-pulse2"/>Online
+              <div style={{ color: 'white', fontWeight: 600, fontSize: 12 }}>Team Leader</div>
+              <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e' }} />
+                Online
               </div>
             </div>
           </div>
-          <div className="text-white/30 text-[10px] text-center mt-3 font-semibold tracking-wide">FBS Warehouse</div>
+          <div style={{ color: 'rgba(255,255,255,0.25)', fontSize: 10, textAlign: 'center', marginTop: 10, letterSpacing: 0.5 }}>
+            FBS Warehouse
+          </div>
         </div>
       </aside>
 
-      {/* ── MAIN ── */}
-      <main className="flex-1 overflow-hidden flex flex-col">
+      {/* MAIN */}
+      <main style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {children}
       </main>
     </div>
