@@ -8,6 +8,15 @@ import { ForecastPage } from '@/pages/ForecastPage'
 import { OpsSnapshotPage } from '@/pages/OpsSnapshotPage'
 import { CopilotPage } from '@/pages/CopilotPage'
 
+function Placeholder({ title }: { title: string }) {
+  return (
+    <div style={{ padding: 40, fontFamily: 'Inter, sans-serif' }}>
+      <div style={{ fontSize: 24, fontWeight: 500, color: '#1a1a1a', marginBottom: 8 }}>{title}</div>
+      <div style={{ fontSize: 14, color: '#9ca3af' }}>Σύντομα διαθέσιμο...</div>
+    </div>
+  )
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -21,8 +30,10 @@ export default function App() {
             <Route path="/schedule" element={<SchedulePage />} />
             <Route path="/forecast" element={<ForecastPage />} />
             <Route path="/copilot" element={<CopilotPage />} />
-            {/* Catch-all redirects */}
-            <Route path="/settings" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/planning" element={<Placeholder title="Daily Planning" />} />
+            <Route path="/breaks" element={<Placeholder title="Διαλείμματα" />} />
+            <Route path="/productivity" element={<Placeholder title="Παραγωγικότητα" />} />
+            <Route path="/reports" element={<Placeholder title="Reports" />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </Layout>

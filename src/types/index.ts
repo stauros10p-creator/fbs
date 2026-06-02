@@ -1,28 +1,16 @@
-// ================================================================
-// WAREHOUSE COPILOT — TypeScript Types
-// ================================================================
-
 export type EmployeeRole = 'operator' | 'picker' | 'packer' | 'validator' | 'sorter' | 'transporter'
 export type EmployeeStatus = 'working' | 'break' | 'sick' | 'vacation' | 'off' | 'redeployed'
 export type SkillLevel = '1' | '2' | '3' | '4' | '5'
 export type AlertSeverity = 'info' | 'warning' | 'critical'
 export type AlertCategory = 'sla' | 'bottleneck' | 'break' | 'staffing' | 'ops_stale'
-export type OrderType = 'due_date' | 'same_day' | 'intraday'
-
-// ---- DATABASE ENTITIES ----
+export type OrderType = 'due_date' | 'intraday'
 
 export interface Warehouse {
   id: string
   name: string
   timezone: string
-  sla_config: SLAConfig
+  sla_config: Record<string, unknown>
   created_at: string
-}
-
-export interface SLAConfig {
-  weekday: { due_date: string; same_day: string; intraday: string }
-  saturday: { due_date: string }
-  sunday: { due_date: string; intraday: string }
 }
 
 export interface Employee {
@@ -37,7 +25,6 @@ export interface Employee {
   current_status: EmployeeStatus
   created_at: string
   updated_at: string
-  // joined
   productivity?: EmployeeProductivity[]
 }
 
@@ -68,12 +55,7 @@ export interface DailyForecast {
   warehouse_id: string
   forecast_date: string
   due_date_orders: number
-  same_day_orders: number
   intraday_orders: number
-  backlog_orders: number
-  latest_ops_snapshot_id: string | null
-  ops_updated_at: string | null
-  created_by: string | null
   created_at: string
   updated_at: string
 }
@@ -86,9 +68,7 @@ export interface OpsSnapshot {
   pending_picking: number
   pending_packing: number
   pending_sorting: number
-  backlog_orders: number
   remaining_due_date: number
-  remaining_same_day: number
   remaining_intraday: number
   notes: string | null
   is_latest: boolean
@@ -142,27 +122,6 @@ export interface AIConversation {
   created_at: string
 }
 
-export interface SLASnapshot {
-  id: string
-  warehouse_id: string
-  ops_snapshot_id: string | null
-  snapshot_at: string
-  order_type: OrderType
-  total_orders: number
-  remaining_orders: number
-  projected_completion: string | null
-  sla_risk_score: number
-  bottleneck_role: EmployeeRole | null
-  pressure_ratio_picker: number | null
-  pressure_ratio_packer: number | null
-  pressure_ratio_sorter: number | null
-  tte_picking_mins: number | null
-  tte_packing_mins: number | null
-  tte_sorting_mins: number | null
-}
-
-// ---- ALGORITHM OUTPUT ----
-
 export interface RoleCapacity {
   role: EmployeeRole
   active_count: number
@@ -197,69 +156,39 @@ export interface BreakSafetyResult {
   status: 'auto_approve' | 'caution' | 'supervisor_review'
   pressure_after: number
   risk_delta: number
-  alternatives: ReallocationSuggestion[]
   message: string
 }
 
-// ---- UI STATE ----
-
-export interface RoleConfig {
-  label: string
-  short: string
-  color: string
-  bgColor: string
-  borderColor: string
-  textColor: string
-}
-
-export const ROLE_CONFIG: Record<EmployeeRole, RoleConfig> = {
-  operator:    { label: 'Operator',    short: 'OP', color: '#22c55e', bgColor: 'bg-success-dim',  borderColor: 'border-success/30',  textColor: 'text-success' },
-  picker:      { label: 'Picker',      short: 'PK', color: '#3b82f6', bgColor: 'bg-blue-dim',   borderColor: 'border-blue/30',   textColor: 'text-blue' },
-  packer:      { label: 'Packer',      short: 'PA', color: '#f97316', bgColor: 'bg-orange-dim', borderColor: 'border-orange/30', textColor: 'text-orange' },
-  validator:   { label: 'Validator',   short: 'VA', color: '#a78bfa', bgColor: 'bg-purple-300/10', borderColor: 'border-purple-400/30', textColor: 'text-purple-400' },
-  sorter:      { label: 'Sorter',      short: 'SO', color: '#eab308', bgColor: 'bg-yellow-dim', borderColor: 'border-yellow/30', textColor: 'text-yellow' },
-  transporter: { label: 'Transporter', short: 'TR', color: '#ec4899', bgColor: 'bg-pink-500/10', borderColor: 'border-pink-500/30', textColor: 'text-pink-400' },
+export const ROLE_CONFIG: Record<EmployeeRole, { label: string; short: string; color: string; bg: string }> = {
+  operator:    { label: 'AutoStore', short: 'OP', color: '#06b6d4', bg: '#ecfeff' },
+  picker:      { label: 'Picking',   short: 'PK', color: '#3b82f6', bg: '#eff6ff' },
+  packer:      { label: 'Packing',   short: 'PA', color: '#22c55e', bg: '#f0fdf4' },
+  validator:   { label: 'Validator', short: 'VA', color: '#8b5cf6', bg: '#f5f3ff' },
+  sorter:      { label: 'Sorter',    short: 'SO', color: '#f97316', bg: '#fff7ed' },
+  transporter: { label: 'Transport', short: 'TR', color: '#ec4899', bg: '#fdf2f8' },
 }
 
 export const STATUS_CONFIG: Record<EmployeeStatus, { label: string; color: string; dot: string }> = {
-  working:    { label: 'Working',    color: 'text-success',      dot: 'bg-success' },
-  break:      { label: 'Break',      color: 'text-warning',      dot: 'bg-warning' },
-  sick:       { label: 'Sick',       color: 'text-danger',       dot: 'bg-danger' },
-  vacation:   { label: 'Vacation',   color: 'text-accent',       dot: 'bg-accent' },
-  off:        { label: 'Off',        color: 'text-muted',        dot: 'bg-muted' },
-  redeployed: { label: 'Redeployed', color: 'text-info',         dot: 'bg-info' },
+  working:    { label: 'Working',    color: '#22c55e', dot: '#22c55e' },
+  break:      { label: 'Break',      color: '#f59e0b', dot: '#f59e0b' },
+  sick:       { label: 'Sick',       color: '#ef4444', dot: '#ef4444' },
+  vacation:   { label: 'Vacation',   color: '#3b82f6', dot: '#3b82f6' },
+  off:        { label: 'Off',        color: '#9ca3af', dot: '#9ca3af' },
+  redeployed: { label: 'Redeployed', color: '#06b6d4', dot: '#06b6d4' },
 }
 
 export const SKILL_LABELS: Record<SkillLevel, string> = {
-  '1': 'Trainee',
-  '2': 'Junior',
-  '3': 'Standard',
-  '4': 'Senior',
-  '5': 'Expert',
+  '1': 'Trainee', '2': 'Junior', '3': 'Standard', '4': 'Senior', '5': 'Expert',
 }
 
 export const SKILL_MULTIPLIERS: Record<SkillLevel, number> = {
-  '1': 0.6,
-  '2': 0.8,
-  '3': 1.0,
-  '4': 1.2,
-  '5': 1.5,
+  '1': 0.6, '2': 0.8, '3': 1.0, '4': 1.2, '5': 1.5,
 }
 
 export const MIN_COVERAGE: Record<EmployeeRole, number> = {
-  operator:    1,
-  picker:      3,
-  packer:      4,
-  validator:   1,
-  sorter:      1,
-  transporter: 2,
+  operator: 1, picker: 3, packer: 4, validator: 1, sorter: 1, transporter: 2,
 }
 
 export const DEFAULT_THROUGHPUT: Record<EmployeeRole, number> = {
-  operator:    0,    // not queue-driven
-  picker:      120,
-  packer:      110,
-  validator:   80,
-  sorter:      150,
-  transporter: 0,    // derived
+  operator: 150, picker: 120, packer: 110, validator: 80, sorter: 150, transporter: 0,
 }
