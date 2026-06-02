@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react'
 import { useAppStore } from '@/store'
 import { useBreakRequests } from '@/hooks'
 import { riskLabel } from '@/lib/engine'
+import { useApplyReallocation } from '@/hooks'
 import { Link } from 'react-router-dom'
 
 const S = {
   page: { display:'flex', flexDirection:'column' as const, height:'100%', overflow:'hidden', background:'#f0f2f7', fontFamily:'Inter,sans-serif' },
   topbar: { background:'white', borderBottom:'1px solid #e2e6ef', padding:'12px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0, boxShadow:'0 1px 3px rgba(0,0,0,0.04)' },
-  content: { flex:1, overflowY:'auto' as const, padding:20, display:'flex', flexDirection:'column' as const, gap:16 },
+  content: { flex:1, overflowY:'auto' as const, padding:20, paddingBottom:80, display:'flex', flexDirection:'column' as const, gap:16 },
   card: { background:'white', borderRadius:12, border:'1px solid #e2e6ef', boxShadow:'0 1px 4px rgba(0,0,0,0.06)' },
   kpiGrid: { display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr 300px', gap:12 },
   kpiCard: { background:'white', borderRadius:12, border:'1px solid #e2e6ef', padding:'16px 18px', display:'flex', gap:14, alignItems:'flex-start', boxShadow:'0 1px 4px rgba(0,0,0,0.06)' },
@@ -73,6 +74,8 @@ export function DashboardPage() {
   const engineResult = useAppStore(s => s.engineResult)
   const latestOps    = useAppStore(s => s.latestOpsSnapshot)
   const { data: breaks = [] } = useBreakRequests()
+  const applyReallocation = useApplyReallocation()
+  const [applied, setApplied] = useState<string[]>([])
   const [now, setNow] = useState(new Date())
   useEffect(() => { const t = setInterval(()=>setNow(new Date()),1000); return ()=>clearInterval(t) }, [])
 
@@ -324,7 +327,22 @@ export function DashboardPage() {
                   </div>
                   <div style={{ fontSize:11,fontWeight:600,color:'#22c55e' }}>Κέρδος: +{s.capacity_gain} u/h</div>
                 </div>
-                <button style={{ background:'#22c55e',color:'white',border:'none',padding:'5px 12px',borderRadius:7,fontSize:11,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap' }}>Εφάρμοσε</button>
+                <button
+                  onClick={async () => {
+                    if (applied.includes(s.employee.id)) return
+                    try {
+                      await applyReallocation.mutateAsync({ employee_id: s.employee.id, from_role: s.from_role, to_role: s.to_role })
+                      setApplied(prev => [...prev, s.employee.id])
+                      const { default: toast } = await import('react-hot-toast')
+                      toast.success(`${s.employee.full_name.split(' ')[0]} μετακινήθηκε σε ${s.to_role}`)
+                    } catch { 
+                      const { default: toast } = await import('react-hot-toast')
+                      toast.error('Αποτυχία μετακίνησης') 
+                    }
+                  }}
+                  style={{ background: applied.includes(s.employee.id) ? '#9ca3af' : '#22c55e', color:'white', border:'none', padding:'5px 12px', borderRadius:7, fontSize:11, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
+                  {applied.includes(s.employee.id) ? '✓ Εφαρμόστηκε' : 'Εφάρμοσε'}
+                </button>
               </div>
             )) : (
               <>
@@ -400,10 +418,10 @@ export function DashboardPage() {
 
       {/* COPILOT FAB */}
       <Link to="/copilot" style={{
-        position:'fixed',bottom:24,right:24,
+        position:'fixed',bottom:24,right:24,zIndex:50,
         background:'#3b82f6',color:'white',
-        padding:'12px 20px',borderRadius:50,
-        fontSize:13,fontWeight:700,
+        padding:'10px 18px',borderRadius:50,
+        fontSize:12,fontWeight:700,
         display:'flex',alignItems:'center',gap:8,
         boxShadow:'0 4px 20px rgba(59,130,246,0.4)',
         textDecoration:'none',
