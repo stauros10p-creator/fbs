@@ -7,6 +7,7 @@ import { SchedulePage } from '@/pages/SchedulePage'
 import { ForecastPage } from '@/pages/ForecastPage'
 import { OpsSnapshotPage } from '@/pages/OpsSnapshotPage'
 import { CopilotPage } from '@/pages/CopilotPage'
+import { PlanningPage } from '@/pages/PlanningPage'
 
 function Placeholder({ title }: { title: string }) {
   return (
@@ -30,7 +31,7 @@ export default function App() {
             <Route path="/schedule" element={<SchedulePage />} />
             <Route path="/forecast" element={<ForecastPage />} />
             <Route path="/copilot" element={<CopilotPage />} />
-            <Route path="/planning" element={<Placeholder title="Daily Planning" />} />
+            <Route path="/planning" element={<PlanningPage />} />
             <Route path="/breaks" element={<Placeholder title="Διαλείμματα" />} />
             <Route path="/productivity" element={<Placeholder title="Παραγωγικότητα" />} />
             <Route path="/reports" element={<Placeholder title="Reports" />} />
@@ -41,5 +42,3 @@ export default function App() {
     </BrowserRouter>
   )
 }
-
-
