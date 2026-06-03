@@ -590,7 +590,7 @@ export function PlanningPage() {
               ]
 
               return sections.map(section => {
-                const sectionAssignments = section.zones.flatMap(z => groups[z] ?? [])
+                const sectionAssignments = section.zones.flatMap(z => (groups as Record<string, Assignment[]>)[z] ?? [])
                 if (sectionAssignments.length === 0) return null
 
                 return (
