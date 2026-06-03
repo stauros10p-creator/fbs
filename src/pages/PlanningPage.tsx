@@ -320,7 +320,7 @@ function buildShiftPlans(
   return planTimes.map(({ time, label, mins }) => {
     const active = allEmps.filter(e => isActiveAt(e, mins))
     const assignments = assignZones(active, supabaseEmps, mins)
-    const packingAssignments = assignments.filter(a => a.role === 'packer' || (a.uph > 0 && ['OG1','L1','L2','L3','L4','L5','Π1','Π2','Π3','Π4'].includes(a.zone)))
+    const packingAssignments = assignments.filter(a => a.employee.role === 'packer' || (a.uph > 0 && ['OG1','L1','L2','L3','L4','L5','Π1','Π2','Π3','Π4'].includes(a.zone)))
     // Deduplicate (packer+validator pairs count once)
     const uniquePackingZones = new Set(packingAssignments.filter(a => a.employee.role === 'packer' || !a.withValidator).map(a => a.zone))
     const totalCapacity = assignments.filter(a => a.employee.role === 'packer').reduce((s, a) => s + a.uph, 0)
