@@ -144,9 +144,7 @@ export function useUpsertForecast() {
   return useMutation({
     mutationFn: async (values: {
       due_date_orders: number
-      same_day_orders: number
       intraday_orders: number
-      backlog_orders: number
     }) => {
       const { data, error } = await supabase
         .from('daily_forecasts')
@@ -213,9 +211,7 @@ export function useCreateOpsSnapshot() {
       pending_picking: number
       pending_packing: number
       pending_sorting: number
-      backlog_orders: number
       remaining_due_date: number
-      remaining_same_day: number
       remaining_intraday: number
       notes?: string
     }) => {

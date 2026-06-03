@@ -1,8 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useAppStore } from '@/store'
-import { getSnapshotAge } from '@/lib/utils'
 import { formatTTE } from '@/lib/engine'
-import { cn } from '@/lib/utils'
 
 export function OpsSnapshotPanel() {
   const ops = useAppStore(s => s.latestOpsSnapshot)
@@ -10,85 +8,59 @@ export function OpsSnapshotPanel() {
 
   if (!ops) {
     return (
-      <div className="panel border-info/20 bg-info/5">
-        <div className="text-xs font-bold tracking-widest text-info uppercase mb-3 pb-2 border-b border-border">
-          ⬡ Ops Snapshot
-        </div>
-        <p className="text-sm text-muted mb-4">No snapshot recorded yet today.</p>
-        <Link to="/ops" className="btn-primary block text-center">Record First Snapshot →</Link>
+      <div style={{ background:'white', borderRadius:12, border:'0.5px solid #e5e5e5', padding:16 }}>
+        <div style={{ fontSize:12, fontWeight:500, marginBottom:8 }}>📸 Ops Snapshot</div>
+        <p style={{ fontSize:11, color:'#9ca3af', marginBottom:12 }}>Δεν υπάρχει snapshot.</p>
+        <Link to="/ops" style={{ display:'block', textAlign:'center', background:'#1a1a1a', color:'white', padding:'8px', borderRadius:8, fontSize:11, textDecoration:'none' }}>
+          Καταγραφή →
+        </Link>
       </div>
     )
   }
 
-  const age = getSnapshotAge(ops.recorded_at)
   const pickerRC = engineResult?.role_capacity.find(r => r.role === 'picker')
   const packerRC = engineResult?.role_capacity.find(r => r.role === 'packer')
   const sorterRC = engineResult?.role_capacity.find(r => r.role === 'sorter')
 
-  const total = ops.remaining_due_date + ops.remaining_same_day + ops.remaining_intraday || 1
-
   return (
-    <div className={cn('panel', age.isStale ? 'border-yellow/30 bg-yellow/5' : 'border-info/20 bg-info/5')}>
-      <div className="flex items-center justify-between mb-3 pb-2 border-b border-border">
-        <div className="text-xs font-bold tracking-widest text-info uppercase">⬡ Ops Snapshot</div>
-        <div className={cn('text-xs font-mono', age.isStale ? 'text-yellow' : 'text-muted')}>
-          {age.label}
-        </div>
+    <div style={{ background:'white', borderRadius:12, border:'0.5px solid #e5e5e5', overflow:'hidden' }}>
+      <div style={{ padding:'10px 14px', borderBottom:'0.5px solid #f5f5f0', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <span style={{ fontSize:12, fontWeight:500 }}>📸 Ops Snapshot</span>
+        <span style={{ fontSize:10, color:'#9ca3af' }}>{new Date(ops.recorded_at).toLocaleTimeString('el-GR', { hour:'2-digit', minute:'2-digit' })}</span>
       </div>
-
-      {/* Queue depths */}
-      <div className="space-y-2 mb-4">
+      <div style={{ padding:'10px 14px' }}>
         {[
-          { label: 'Pending Picking', value: ops.pending_picking, tte: pickerRC?.tte_minutes, color: 'text-blue' },
-          { label: 'Pending Packing', value: ops.pending_packing, tte: packerRC?.tte_minutes, color: packerRC?.status === 'critical' ? 'text-red' : packerRC?.status === 'risk' ? 'text-orange' : 'text-info', critical: packerRC?.status === 'critical' },
-          { label: 'Pending Sorting', value: ops.pending_sorting, tte: sorterRC?.tte_minutes, color: 'text-purple-400' },
-        ].map(({ label, value, tte, color, critical }) => (
-          <div
-            key={label}
-            className={cn(
-              'flex items-center justify-between py-2 px-2 -mx-2 rounded',
-              critical ? 'bg-red/10' : 'hover:bg-surface3/30',
-            )}
-          >
-            <span className="text-xs text-muted">{label}</span>
-            <div className="text-right">
-              <div className={cn('font-mono text-sm font-bold', color)}>{value.toLocaleString()}</div>
+          { label:'Pending Picking', val:ops.pending_picking, tte:pickerRC?.tte_minutes, color:'#3b82f6' },
+          { label:'Pending Packing', val:ops.pending_packing, tte:packerRC?.tte_minutes, color:'#22c55e' },
+          { label:'Pending Sorting', val:ops.pending_sorting, tte:sorterRC?.tte_minutes, color:'#8b5cf6' },
+        ].map(({ label, val, tte, color }) => (
+          <div key={label} style={{ display:'flex', justifyContent:'space-between', padding:'6px 0', borderBottom:'0.5px solid #f9f9f7' }}>
+            <span style={{ fontSize:11, color:'#6b7280' }}>{label}</span>
+            <div style={{ textAlign:'right' }}>
+              <div style={{ fontSize:13, fontWeight:500, color, fontFamily:'monospace' }}>{val.toLocaleString()}</div>
               {tte !== null && tte !== undefined && (
-                <div className={cn('font-mono text-[10px]', tte < 30 ? 'text-success' : tte < 60 ? 'text-yellow' : 'text-red')}>
-                  TTE {formatTTE(tte)}
-                </div>
+                <div style={{ fontSize:9, color: tte<30?'#22c55e':tte<60?'#f59e0b':'#ef4444' }}>TTE {formatTTE(tte)}</div>
               )}
             </div>
           </div>
         ))}
-      </div>
-
-      {/* SLA progress bars */}
-      <div className="space-y-2.5 mb-4">
-        <div className="text-xs font-semibold text-muted uppercase tracking-wider mb-1">Remaining by SLA</div>
-        {[
-          { label: 'Due Date → 19:00', value: ops.remaining_due_date, color: 'bg-success' },
-          { label: 'Same Day → 13:00', value: ops.remaining_same_day, color: 'bg-orange', urgent: true },
-          { label: 'Intraday → 24:00', value: ops.remaining_intraday, color: 'bg-blue' },
-        ].map(({ label, value, color, urgent }) => (
-          <div key={label}>
-            <div className="flex justify-between text-xs mb-1">
-              <span className={cn('text-muted', urgent && 'text-orange/80')}>{label}</span>
-              <span className="font-mono text-slate-300">{value.toLocaleString()}</span>
+        <div style={{ marginTop:10 }}>
+          <div style={{ fontSize:10, fontWeight:600, color:'#9ca3af', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6 }}>Υπόλοιπα SLA</div>
+          {[
+            { label:'Due Date → 19:00', val:ops.remaining_due_date, color:'#3b82f6' },
+            { label:'Intraday → 01:30', val:ops.remaining_intraday, color:'#8b5cf6' },
+          ].map(({ label, val, color }) => (
+            <div key={label} style={{ display:'flex', justifyContent:'space-between', padding:'5px 0' }}>
+              <span style={{ fontSize:10, color:'#9ca3af' }}>{label}</span>
+              <span style={{ fontSize:12, fontWeight:500, color, fontFamily:'monospace' }}>{val.toLocaleString()}</span>
             </div>
-            <div className="h-1 bg-surface3 rounded-full overflow-hidden">
-              <div
-                className={cn('h-full rounded-full transition-all', color)}
-                style={{ width: `${Math.min(100, (value / total) * 100 * 3)}%` }}
-              />
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
+        <Link to="/ops" style={{ display:'block', textAlign:'center', border:'0.5px solid #e5e5e5', color:'#6b7280', padding:'7px', borderRadius:8, fontSize:11, textDecoration:'none', marginTop:10 }}>
+          + Ενημέρωση
+        </Link>
       </div>
-
-      <Link to="/ops" className="btn-secondary block text-center">
-        + Update Snapshot
-      </Link>
     </div>
   )
 }
+
