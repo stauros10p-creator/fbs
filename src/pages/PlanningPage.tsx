@@ -7,266 +7,341 @@ import type { Employee } from '@/types'
 
 interface ParsedEmployee {
   full_name: string
-  employee_id: string
   role: string
-  shift: string // e.g. "07:00-15:00"
+  shift: string
+  shift_start: number // minutes from midnight
+  shift_end: number
+  break_time: number  // minutes from midnight
 }
 
-interface PlanningInput {
-  due_date_orders: number
-  intraday_orders: number
-  due_date_backlog: number
-  current_time: string
-  break1: string
-  break2: string
+interface OverviewData {
+  kataxorisi: { poly: number; mono: number; autostore: number; picked_as: number; ogkodi: number; cargo: number }
+  proetoimasia: { poly: number; mono: number; autostore: number; picked_as: number; ogkodi: number; cargo: number }
 }
 
-interface Assignment {
-  employee: Employee
+interface ThroughputRow {
+  hour_start: number // 0-23
+  packed: number
+  downloaded: number
+}
+
+interface ShiftPlan {
+  time: string
+  label: string
+  employees: PlanAssignment[]
+  totalCapacity: number
+  pendingOrders: number
+  neededCapacity: number
+  status: 'ok' | 'warning' | 'critical'
+}
+
+interface PlanAssignment {
+  employee: ParsedEmployee
+  supabaseEmp: Employee | null
   zone: string
   position: string
-  role: string
   uph: number
-  shift: string
   withValidator?: string
 }
 
-// ─── Zone config ──────────────────────────────────────────────────────────────
+// ─── Shift & Break config ─────────────────────────────────────────────────────
 
-const ZONES = {
-  OG1:  { label: 'Ογκώδη',        color: '#f59e0b', bg: '#fffbeb', capacity: 80,  maxPackers: 1 },
-  RED1: { label: 'Κόκκ. Π1',      color: '#ef4444', bg: '#fef2f2', capacity: 90,  maxPackers: 1 },
-  RED2: { label: 'Κόκκ. Π2',      color: '#ef4444', bg: '#fef2f2', capacity: 90,  maxPackers: 1 },
-  RED3: { label: 'Κόκκ. Π3',      color: '#ef4444', bg: '#fef2f2', capacity: 90,  maxPackers: 1 },
-  RED4: { label: 'Κόκκ. Π4',      color: '#ef4444', bg: '#fef2f2', capacity: 90,  maxPackers: 1 },
-  L1:   { label: 'Πράσ. L1',      color: '#22c55e', bg: '#f0fdf4', capacity: 110, maxPackers: 1 },
-  L2:   { label: 'Πράσ. L2',      color: '#22c55e', bg: '#f0fdf4', capacity: 110, maxPackers: 1 },
-  L3:   { label: 'Πράσ. L3',      color: '#22c55e', bg: '#f0fdf4', capacity: 110, maxPackers: 1 },
-  L4:   { label: 'Πράσ. L4',      color: '#22c55e', bg: '#f0fdf4', capacity: 110, maxPackers: 1 },
-  L5:   { label: 'Πράσ. L5',      color: '#22c55e', bg: '#f0fdf4', capacity: 110, maxPackers: 1 },
+function parseTime(t: string): number {
+  if (!t || t === 'day_off' || t === 'unexcused' || t === 'regular') return -1
+  const parts = t.split('-')
+  if (parts.length < 2) return -1
+  const [h, m] = parts[0].split(':').map(Number)
+  return h * 60 + (m || 0)
 }
 
-// ─── Excel parser ─────────────────────────────────────────────────────────────
+function shiftEnd(t: string): number {
+  if (!t || t === 'day_off') return -1
+  const parts = t.split('-')
+  if (parts.length < 2) return -1
+  const [h, m] = parts[1].split(':').map(Number)
+  const mins = h * 60 + (m || 0)
+  return mins < parseTime(t) ? mins + 24 * 60 : mins
+}
 
-async function parsePapakiasExcel(file: File, targetDate: Date): Promise<ParsedEmployee[]> {
+function getBreak(shiftStr: string): number {
+  const start = parseTime(shiftStr)
+  if (start < 0) return -1
+  if (start <= 6 * 60)  return 12 * 60        // 06:xx → break 12:00
+  if (start <= 7 * 60)  return 12 * 60 + 30   // 07:xx → break 12:30
+  if (start <= 9 * 60)  return 12 * 60 + 30   // 09:xx → break 12:30
+  if (start <= 13 * 60) return 18 * 60 + 30   // 13:xx → break 18:30
+  return 22 * 60 + 30                           // 18:xx → break 22:30
+}
+
+function isActiveAt(emp: ParsedEmployee, timeMins: number): boolean {
+  if (emp.shift_start < 0) return false
+  // on break ±15min window
+  if (Math.abs(emp.break_time - timeMins) < 30) return false
+  const end = emp.shift_end
+  if (end > emp.shift_start) {
+    return timeMins >= emp.shift_start && timeMins < end
+  } else {
+    // overnight shift
+    return timeMins >= emp.shift_start || timeMins < end
+  }
+}
+
+// ─── Excel parsers ────────────────────────────────────────────────────────────
+
+async function parsePapakias(file: File, date: Date): Promise<ParsedEmployee[]> {
   const XLSX = await import('xlsx')
   const buf = await file.arrayBuffer()
   const wb = XLSX.read(buf, { type: 'array' })
   const ws = wb.Sheets[wb.SheetNames[0]]
   const rows = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 }) as string[][]
-
-  // Header row: fbs_type, employee_name, Date1..Date7, days_per_week
-  // We need to figure out which column corresponds to targetDate
-  // The file covers a week — we use day of week (Mon=1..Sun=7)
-  // Date1=col2, Date2=col3 ... Date7=col8
-  const dow = targetDate.getDay() // 0=Sun,1=Mon,...,6=Sat
-  // Map: Mon=Date1(col2), Tue=Date2(col3)...Sun=Date7(col8)
-  const colIndex = dow === 0 ? 8 : dow + 1 // 0-based + 2 offset
+  const dow = date.getDay()
+  const colIndex = dow === 0 ? 8 : dow + 1
 
   const result: ParsedEmployee[] = []
-
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i]
     if (!row || !row[1]) continue
     const roleRaw = String(row[0] ?? '').toLowerCase().trim()
     const nameRaw = String(row[1] ?? '').trim()
     const shiftRaw = String(row[colIndex] ?? '').trim()
-
     if (!nameRaw || shiftRaw === 'day_off' || shiftRaw === 'unexcused') continue
-
-    // Extract clean name (remove id part)
     const name = nameRaw.replace(/\s*\(id:\d+\)\s*$/, '').trim()
-    // Extract employee id
-    const idMatch = nameRaw.match(/\(id:(\d+)\)/)
-    const empId = idMatch ? idMatch[1] : ''
-
-    // Normalize role
     let role = roleRaw
-    if (role === 'operator') role = 'operator'
-    else if (role === 'palletizing') role = 'sorter'
+    if (role === 'palletizing') role = 'sorter'
+    const start = parseTime(shiftRaw)
+    const end = shiftEnd(shiftRaw)
+    const brk = getBreak(shiftRaw)
+    if (start < 0) continue
+    result.push({ full_name: name, role, shift: shiftRaw, shift_start: start, shift_end: end, break_time: brk })
+  }
+  return result
+}
 
-    result.push({ full_name: name, employee_id: empId, role, shift: shiftRaw })
+async function parseOverview(file: File): Promise<OverviewData> {
+  const XLSX = await import('xlsx')
+  const buf = await file.arrayBuffer()
+  const wb = XLSX.read(buf, { type: 'array' })
+  const ws = wb.Sheets[wb.SheetNames[0]]
+  const rows = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 }) as string[][]
+
+  function cleanNum(v: unknown): number {
+    if (v == null) return 0
+    const n = parseFloat(String(v).replace(/[^0-9.-]/g, '').replace(',', '.'))
+    return isNaN(n) ? 0 : n
   }
 
-  return result
+  // Row 1 = Καταχώρηση, Row 2 = Προετοιμασία
+  const k = rows[1] ?? []
+  const p = rows[2] ?? []
+  return {
+    kataxorisi:   { poly: cleanNum(k[1]), mono: cleanNum(k[2]), autostore: cleanNum(k[3]), picked_as: cleanNum(k[4]), ogkodi: cleanNum(k[5]), cargo: cleanNum(k[6]) },
+    proetoimasia: { poly: cleanNum(p[1]), mono: cleanNum(p[2]), autostore: cleanNum(p[3]), picked_as: cleanNum(p[4]), ogkodi: cleanNum(p[5]), cargo: cleanNum(p[6]) },
+  }
+}
+
+async function parseThroughput(file: File, targetDow: number): Promise<ThroughputRow[]> {
+  const XLSX = await import('xlsx')
+  const buf = await file.arrayBuffer()
+  const wb = XLSX.read(buf, { type: 'array' })
+  const ws = wb.Sheets[wb.SheetNames[0]]
+  const rows = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 }) as string[][]
+
+  const DOW_NAMES = ['Κυριακή','Δευτέρα','Τρίτη','Τετάρτη','Πέμπτη','Παρασκευή','Σάββατο']
+  // Use previous day's data for forecast
+  const prevDow = targetDow === 0 ? 6 : targetDow - 1
+  const prevName = DOW_NAMES[prevDow]
+
+  const result: ThroughputRow[] = []
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i]
+    if (!row || !row[2]) continue
+    const day = String(row[1] ?? '').trim()
+    const hourStr = String(row[2] ?? '').trim()
+    if (hourStr === 'Σύνολο') continue
+    const hourStart = parseInt(hourStr.split('-')[0])
+    const packed = parseFloat(String(row[3] ?? '0').replace(/[^0-9.-]/g, '')) || 0
+    const downloaded = parseFloat(String(row[4] ?? '0').replace(/[^0-9.-]/g, '')) || 0
+    if (day === prevName || rows.length < 30) {
+      result.push({ hour_start: hourStart, packed, downloaded })
+    }
+  }
+
+  // If no match for prev day, use all available rows
+  if (result.length === 0) {
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i]
+      if (!row || !row[2]) continue
+      const hourStr = String(row[2] ?? '').trim()
+      if (hourStr === 'Σύνολο') continue
+      const hourStart = parseInt(hourStr.split('-')[0])
+      const packed = parseFloat(String(row[3] ?? '0').replace(/[^0-9.-]/g, '')) || 0
+      const downloaded = parseFloat(String(row[4] ?? '0').replace(/[^0-9.-]/g, '')) || 0
+      result.push({ hour_start: hourStart, packed, downloaded })
+    }
+  }
+
+  return result.sort((a, b) => a.hour_start - b.hour_start)
 }
 
 // ─── Algorithm ────────────────────────────────────────────────────────────────
 
-function runAlgorithm(
-  present: ParsedEmployee[],
-  employees: Employee[],
-  input: PlanningInput
-): { assignments: Assignment[]; summary: string[]; totalCapacity: number; needed: number } {
+function calcPendingOrders(
+  overview: OverviewData,
+  throughput: ThroughputRow[],
+  atTimeMins: number,
+  cutoffMins: number
+): number {
+  // Total currently pending = proetoimasia total (ready to pack)
+  const pendingNow =
+    overview.proetoimasia.poly +
+    overview.proetoimasia.mono +
+    overview.proetoimasia.picked_as +
+    overview.proetoimasia.ogkodi
 
-  const now = input.current_time.split(':').map(Number)
-  const nowMins = now[0] * 60 + now[1]
-  const dueCutoff = 19 * 60
-  const intradayCutoff = 24 * 60 + 90 // 01:30
-  const hoursUntilDue = Math.max(0, (dueCutoff - nowMins) / 60)
+  // Estimate additional downloads from now until cutoff
+  const hoursLeft = Math.max(0, (cutoffMins - atTimeMins) / 60)
+  const atHour = Math.floor(atTimeMins / 60)
+  const cutoffHour = Math.min(23, Math.floor(cutoffMins / 60))
 
-  const totalOrders = input.due_date_orders + input.due_date_backlog
-  const neededCapacity = hoursUntilDue > 0 ? Math.ceil(totalOrders / hoursUntilDue) : 9999
-
-  // Match present employees to Supabase records
-  const matched: Array<{ parsed: ParsedEmployee; emp: Employee; uph: number }> = []
-
-  for (const p of present) {
-    const emp = employees.find(e =>
-      e.full_name === p.full_name ||
-      e.full_name.toLowerCase() === p.full_name.toLowerCase()
-    )
-    if (!emp) continue
-
-    // Get best uph for role
-    let uph = emp.productivity?.find(pr => pr.role === emp.primary_role)?.units_per_hour
-      ?? emp.productivity?.[0]?.units_per_hour
-      ?? 100
-
-    matched.push({ parsed: p, emp, uph })
-  }
-
-  // Separate by role
-  const packers   = matched.filter(m => m.parsed.role === 'packer').sort((a, b) => b.uph - a.uph)
-  const validators = matched.filter(m => m.parsed.role === 'validator').sort((a, b) => b.uph - a.uph)
-  const operators = matched.filter(m => m.parsed.role === 'operator' || m.emp.primary_role === 'operator')
-  const pickers   = matched.filter(m => m.parsed.role === 'picker')
-  const sorters   = matched.filter(m => m.parsed.role === 'sorter' || m.parsed.role === 'palletizing')
-
-  const assignments: Assignment[] = []
-  const usedPackers = new Set<string>()
-  const usedValidators = new Set<string>()
-
-  // 1. Operators → AutoStore
-  operators.forEach((m, i) => {
-    assignments.push({
-      employee: m.emp, zone: 'AutoStore', position: `Op${i + 1}`,
-      role: 'operator', uph: m.uph, shift: m.parsed.shift,
-    })
-  })
-
-  // 2. Pickers → Picking
-  pickers.forEach((m, i) => {
-    assignments.push({
-      employee: m.emp, zone: 'Picking', position: `PK${i + 1}`,
-      role: 'picker', uph: m.uph, shift: m.parsed.shift,
-    })
-  })
-
-  // 3. Sorters → Sorting
-  sorters.forEach((m, i) => {
-    assignments.push({
-      employee: m.emp, zone: 'Sorting', position: `SR${i + 1}`,
-      role: 'sorter', uph: m.uph, shift: m.parsed.shift,
-    })
-  })
-
-  // 4. Assign 1 packer to OG1 (lowest performer — save best for red/green)
-  const ogPacker = packers[packers.length - 1]
-  if (ogPacker && !usedPackers.has(ogPacker.emp.id)) {
-    usedPackers.add(ogPacker.emp.id)
-    assignments.push({
-      employee: ogPacker.emp, zone: 'OG1', position: 'Og1',
-      role: 'packer', uph: 80, shift: ogPacker.parsed.shift,
-    })
-  }
-
-  // 5. RED zone: pair best packers with validators (145/hr) or alone (90/hr)
-  const redPositions = ['RED1', 'RED2', 'RED3', 'RED4']
-  const availPackers = packers.filter(m => !usedPackers.has(m.emp.id))
-  const availValidators = [...validators]
-
-  for (const pos of redPositions) {
-    const packer = availPackers.find(m => !usedPackers.has(m.emp.id))
-    if (!packer) break
-    usedPackers.add(packer.emp.id)
-
-    const validator = availValidators.find(v => !usedValidators.has(v.emp.id))
-    let capacity = 90
-    let validatorName: string | undefined
-
-    if (validator) {
-      usedValidators.add(validator.emp.id)
-      capacity = 145
-      validatorName = validator.emp.full_name.split(' ').slice(0, 2).join(' ')
-      assignments.push({
-        employee: validator.emp, zone: pos, position: pos.replace('RED', 'Π'),
-        role: 'validator', uph: 145, shift: validator.parsed.shift,
-        withValidator: undefined,
-      })
-    }
-
-    assignments.push({
-      employee: packer.emp, zone: pos, position: pos.replace('RED', 'Π'),
-      role: 'packer', uph: capacity, shift: packer.parsed.shift,
-      withValidator: validatorName,
-    })
-  }
-
-  // 6. GREEN zone L1-L5: remaining packers by performance
-  const greenPositions = ['L1', 'L2', 'L3', 'L4', 'L5']
-  const greenPackers = packers.filter(m => !usedPackers.has(m.emp.id))
-
-  greenPackers.forEach((packer, i) => {
-    if (i >= greenPositions.length) return
-    const pos = greenPositions[i]
-    usedPackers.add(packer.emp.id)
-    assignments.push({
-      employee: packer.emp, zone: pos, position: pos,
-      role: 'packer', uph: 110, shift: packer.parsed.shift,
-    })
-  })
-
-  // 7. Remaining validators without a packer pair
-  validators.filter(v => !usedValidators.has(v.emp.id)).forEach((v, i) => {
-    assignments.push({
-      employee: v.emp, zone: 'Validator', position: `VA${i + 1}`,
-      role: 'validator', uph: 0, shift: v.parsed.shift,
-    })
-  })
-
-  // Calculate total packing capacity
-  const packingAssignments = assignments.filter(a => a.role === 'packer')
-  const totalCapacity = packingAssignments.reduce((s, a) => s + a.uph, 0)
-
-  // Summary messages
-  const summary: string[] = []
-  const gap = totalCapacity - neededCapacity
-  if (hoursUntilDue > 0) {
-    summary.push(`Στόχος: ${neededCapacity} παρ/ώρα για Due Date έως 19:00 (${hoursUntilDue.toFixed(1)}h)`)
-    if (gap >= 0) {
-      summary.push(`✅ Capacity OK — πλεόνασμα ${gap} παρ/ώρα`)
-    } else {
-      summary.push(`⚠️ Έλλειμμα ${Math.abs(gap)} παρ/ώρα — χρειάζεσαι ${Math.ceil(Math.abs(gap) / 110)} επιπλέον packer`)
+  let expectedDownloads = 0
+  for (const row of throughput) {
+    if (row.hour_start >= atHour && row.hour_start < cutoffHour) {
+      expectedDownloads += row.downloaded
     }
   }
-  summary.push(`Intraday: ~${input.intraday_orders} παρ. — cutoff 01:30`)
 
-  return { assignments, summary, totalCapacity, needed: neededCapacity }
+  return Math.round(pendingNow + expectedDownloads * 0.85) // 0.85 = day-to-day variance factor
 }
 
-// ─── UI Helpers ───────────────────────────────────────────────────────────────
+function assignZones(
+  activeEmps: ParsedEmployee[],
+  supabaseEmps: Employee[],
+  timeMins: number
+): PlanAssignment[] {
+  const assignments: PlanAssignment[] = []
+
+  function findSupa(name: string): Employee | null {
+    return supabaseEmps.find(e => e.full_name === name || e.full_name.toLowerCase() === name.toLowerCase()) ?? null
+  }
+
+  function getUph(emp: Employee | null, role: string): number {
+    if (!emp) return 100
+    const p = emp.productivity?.find(pr => pr.role === role) ?? emp.productivity?.[0]
+    return p?.units_per_hour ?? 100
+  }
+
+  const packers    = activeEmps.filter(e => e.role === 'packer').map(e => ({ e, s: findSupa(e.full_name), uph: getUph(findSupa(e.full_name), 'packer') })).sort((a, b) => b.uph - a.uph)
+  const validators = activeEmps.filter(e => e.role === 'validator').map(e => ({ e, s: findSupa(e.full_name), uph: 0 }))
+  const operators  = activeEmps.filter(e => e.role === 'operator')
+  const pickers    = activeEmps.filter(e => e.role === 'picker')
+  const sorters    = activeEmps.filter(e => e.role === 'sorter' || e.role === 'palletizing')
+
+  const usedP = new Set<string>()
+  const usedV = new Set<string>()
+
+  // Operators
+  operators.forEach((e, i) => {
+    const s = findSupa(e.full_name)
+    assignments.push({ employee: e, supabaseEmp: s, zone: 'AutoStore', position: `Op${i+1}`, uph: getUph(s,'operator') })
+  })
+
+  // Pickers
+  pickers.forEach((e, i) => {
+    const s = findSupa(e.full_name)
+    assignments.push({ employee: e, supabaseEmp: s, zone: 'Picking', position: `PK${i+1}`, uph: getUph(s,'picker') })
+  })
+
+  // Sorters
+  sorters.forEach((e, i) => {
+    const s = findSupa(e.full_name)
+    assignments.push({ employee: e, supabaseEmp: s, zone: 'Sorting', position: `SR${i+1}`, uph: 0 })
+  })
+
+  // OG1 — weakest packer
+  const ogPacker = packers[packers.length - 1]
+  if (ogPacker && !usedP.has(ogPacker.e.full_name)) {
+    usedP.add(ogPacker.e.full_name)
+    assignments.push({ employee: ogPacker.e, supabaseEmp: ogPacker.s, zone: 'OG1', position: 'Og1', uph: 80 })
+  }
+
+  // Red zone — best packers + validators
+  const redPositions = ['Π1','Π2','Π3','Π4']
+  const availPackers = packers.filter(p => !usedP.has(p.e.full_name))
+  const availValidators = validators.filter(v => !usedV.has(v.e.full_name))
+
+  for (const pos of redPositions) {
+    const packer = availPackers.find(p => !usedP.has(p.e.full_name))
+    if (!packer) break
+    usedP.add(packer.e.full_name)
+    const validator = availValidators.find(v => !usedV.has(v.e.full_name))
+    if (validator) {
+      usedV.add(validator.e.full_name)
+      const valShortName = validator.e.full_name.split(' ')[0]
+      assignments.push({ employee: validator.e, supabaseEmp: validator.s, zone: `RED_${pos}`, position: pos, uph: 145, withValidator: undefined })
+      assignments.push({ employee: packer.e, supabaseEmp: packer.s, zone: `RED_${pos}`, position: pos, uph: 145, withValidator: valShortName })
+    } else {
+      assignments.push({ employee: packer.e, supabaseEmp: packer.s, zone: `RED_${pos}`, position: pos, uph: 90 })
+    }
+  }
+
+  // Green zone L1-L5
+  const greenPositions = ['L1','L2','L3','L4','L5']
+  packers.filter(p => !usedP.has(p.e.full_name)).forEach((packer, i) => {
+    if (i >= greenPositions.length) return
+    usedP.add(packer.e.full_name)
+    assignments.push({ employee: packer.e, supabaseEmp: packer.s, zone: greenPositions[i], position: greenPositions[i], uph: 110 })
+  })
+
+  // Remaining validators
+  validators.filter(v => !usedV.has(v.e.full_name)).forEach((v, i) => {
+    assignments.push({ employee: v.e, supabaseEmp: v.s, zone: 'Validator', position: `VA${i+1}`, uph: 0 })
+  })
+
+  return assignments
+}
+
+function buildShiftPlans(
+  allEmps: ParsedEmployee[],
+  supabaseEmps: Employee[],
+  overview: OverviewData,
+  throughput: ThroughputRow[]
+): ShiftPlan[] {
+  const planTimes = [
+    { time: '07:00', label: 'Έναρξη Πρωινής', mins: 7 * 60 },
+    { time: '12:00', label: 'Διάλειμμα 06:00 βάρδια', mins: 12 * 60 },
+    { time: '12:30', label: 'Κύρια Αλλαγή', mins: 12 * 60 + 30 },
+    { time: '13:00', label: 'Ενίσχυση Απογευματινής', mins: 13 * 60 },
+    { time: '18:30', label: 'Διάλειμμα Απογευματινής', mins: 18 * 60 + 30 },
+  ]
+
+  const dueCutoff = 19 * 60
+  const intradayCutoff = 24 * 60 + 90
+
+  return planTimes.map(({ time, label, mins }) => {
+    const active = allEmps.filter(e => isActiveAt(e, mins))
+    const assignments = assignZones(active, supabaseEmps, mins)
+    const packingAssignments = assignments.filter(a => a.role === 'packer' || (a.uph > 0 && ['OG1','L1','L2','L3','L4','L5','Π1','Π2','Π3','Π4'].includes(a.zone)))
+    // Deduplicate (packer+validator pairs count once)
+    const uniquePackingZones = new Set(packingAssignments.filter(a => a.employee.role === 'packer' || !a.withValidator).map(a => a.zone))
+    const totalCapacity = assignments.filter(a => a.employee.role === 'packer').reduce((s, a) => s + a.uph, 0)
+
+    const cutoff = mins < 19 * 60 ? dueCutoff : intradayCutoff
+    const pending = calcPendingOrders(overview, throughput, mins, cutoff)
+    const hoursLeft = Math.max(0.5, (cutoff - mins) / 60)
+    const needed = Math.ceil(pending / hoursLeft)
+
+    const gap = totalCapacity - needed
+    const status: 'ok' | 'warning' | 'critical' = gap >= 0 ? 'ok' : gap > -100 ? 'warning' : 'critical'
+
+    return { time, label, employees: assignments, totalCapacity, pendingOrders: pending, neededCapacity: needed, status }
+  })
+}
+
+// ─── UI ───────────────────────────────────────────────────────────────────────
 
 function initials(name: string) {
   return name.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2)
 }
-
-const ZONE_GROUPS = [
-  { key: 'AutoStore', label: 'AutoStore', color: '#06b6d4', bg: '#ecfeff' },
-  { key: 'Picking',  label: 'Picking',   color: '#3b82f6', bg: '#eff6ff' },
-  { key: 'OG1',      label: 'Ογκώδη',   color: '#f59e0b', bg: '#fffbeb' },
-  { key: 'RED1',     label: 'Κόκκινη Ζώνη', color: '#ef4444', bg: '#fef2f2' },
-  { key: 'RED2',     label: '',          color: '#ef4444', bg: '#fef2f2' },
-  { key: 'RED3',     label: '',          color: '#ef4444', bg: '#fef2f2' },
-  { key: 'RED4',     label: '',          color: '#ef4444', bg: '#fef2f2' },
-  { key: 'L1',       label: 'Πράσινη Ζώνη', color: '#22c55e', bg: '#f0fdf4' },
-  { key: 'L2',       label: '',          color: '#22c55e', bg: '#f0fdf4' },
-  { key: 'L3',       label: '',          color: '#22c55e', bg: '#f0fdf4' },
-  { key: 'L4',       label: '',          color: '#22c55e', bg: '#f0fdf4' },
-  { key: 'L5',       label: '',          color: '#22c55e', bg: '#f0fdf4' },
-  { key: 'Sorting',  label: 'Sorting',   color: '#f97316', bg: '#fff7ed' },
-  { key: 'Validator',label: 'Validator', color: '#8b5cf6', bg: '#f5f3ff' },
-]
 
 const ROLE_COLOR: Record<string, { color: string; bg: string }> = {
   operator:  { color: '#06b6d4', bg: '#ecfeff' },
@@ -276,84 +351,189 @@ const ROLE_COLOR: Record<string, { color: string; bg: string }> = {
   sorter:    { color: '#f97316', bg: '#fff7ed' },
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+const ZONE_SECTION: { key: string; title: string; color: string; bg: string; zones: string[] }[] = [
+  { key: 'autostore', title: 'AutoStore',            color: '#06b6d4', bg: '#ecfeff', zones: ['AutoStore'] },
+  { key: 'picking',   title: 'Picking',               color: '#3b82f6', bg: '#eff6ff', zones: ['Picking'] },
+  { key: 'og',        title: '🟡 Ογκώδη',            color: '#f59e0b', bg: '#fffbeb', zones: ['OG1'] },
+  { key: 'red',       title: '🔴 Κόκκινη Ζώνη',      color: '#ef4444', bg: '#fef2f2', zones: ['RED_Π1','RED_Π2','RED_Π3','RED_Π4'] },
+  { key: 'green',     title: '🟢 Πράσινη Ζώνη',      color: '#22c55e', bg: '#f0fdf4', zones: ['L1','L2','L3','L4','L5'] },
+  { key: 'sorting',   title: 'Sorting / Palletizing', color: '#f97316', bg: '#fff7ed', zones: ['Sorting'] },
+  { key: 'validator', title: 'Validators',            color: '#8b5cf6', bg: '#f5f3ff', zones: ['Validator'] },
+]
+
+const STATUS_COLOR = { ok: '#22c55e', warning: '#f59e0b', critical: '#ef4444' }
+const STATUS_LABEL = { ok: '✅ OK', warning: '⚠️ Οριακά', critical: '🔴 Έλλειμμα' }
+
+function AssignmentCard({ a }: { a: PlanAssignment }) {
+  const rc = ROLE_COLOR[a.employee.role] ?? ROLE_COLOR.packer
+  const skill = a.supabaseEmp ? SKILL_LABELS[a.supabaseEmp.skill_level as keyof typeof SKILL_LABELS] : ''
+  return (
+    <div style={{ background: 'white', padding: '10px 12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <div style={{ width: 34, height: 34, borderRadius: '50%', background: rc.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 500, color: 'white', flexShrink: 0 }}>
+          {initials(a.employee.full_name)}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12, fontWeight: 500, color: '#1a1a1a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {a.employee.full_name.split(' ').slice(0, 2).join(' ')}
+          </div>
+          <div style={{ fontSize: 10, color: '#9ca3af' }}>{a.employee.shift}</div>
+        </div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: rc.color, background: rc.bg, padding: '2px 8px', borderRadius: 20, flexShrink: 0 }}>
+          {a.position}
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+        {skill && <span style={{ fontSize: 9, color: '#9ca3af', background: '#f9f9f7', padding: '2px 6px', borderRadius: 10 }}>{skill}</span>}
+        {a.uph > 0 && <span style={{ fontSize: 9, color: '#9ca3af', background: '#f9f9f7', padding: '2px 6px', borderRadius: 10, fontFamily: 'monospace' }}>{a.uph} u/h</span>}
+        {a.withValidator && <span style={{ fontSize: 9, color: '#8b5cf6', background: '#f5f3ff', padding: '2px 6px', borderRadius: 10 }}>+{a.withValidator}</span>}
+      </div>
+    </div>
+  )
+}
+
+function ShiftPlanCard({ plan, expanded, onToggle }: { plan: ShiftPlan; expanded: boolean; onToggle: () => void }) {
+  const sc = STATUS_COLOR[plan.status]
+  const groups: Record<string, PlanAssignment[]> = {}
+  for (const a of plan.employees) {
+    if (!groups[a.zone]) groups[a.zone] = []
+    groups[a.zone].push(a)
+  }
+
+  return (
+    <div style={{ background: 'white', borderRadius: 12, border: `0.5px solid ${expanded ? '#1a1a1a' : '#e5e5e5'}`, overflow: 'hidden', transition: 'border-color 0.15s' }}>
+      {/* Plan header */}
+      <div onClick={onToggle} style={{ padding: '14px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ background: '#1a1a1a', color: 'white', borderRadius: 8, padding: '6px 12px', fontSize: 14, fontWeight: 500, flexShrink: 0 }}>
+          {plan.time}
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: '#1a1a1a', marginBottom: 2 }}>{plan.label}</div>
+          <div style={{ fontSize: 11, color: '#9ca3af' }}>{plan.employees.length} εργαζόμενοι ενεργοί</div>
+        </div>
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          <div style={{ fontSize: 11, color: sc, fontWeight: 600, marginBottom: 2 }}>{STATUS_LABEL[plan.status]}</div>
+          <div style={{ fontSize: 10, color: '#9ca3af' }}>{plan.totalCapacity} / {plan.neededCapacity} u/h</div>
+        </div>
+        <div style={{ fontSize: 16, color: '#9ca3af', marginLeft: 4 }}>{expanded ? '▲' : '▼'}</div>
+      </div>
+
+      {/* Capacity bar */}
+      <div style={{ height: 3, background: '#f0f0f0' }}>
+        <div style={{ height: '100%', width: `${Math.min(100, Math.round((plan.totalCapacity / Math.max(1, plan.neededCapacity)) * 100))}%`, background: sc, transition: 'width 0.5s ease' }} />
+      </div>
+
+      {expanded && (
+        <>
+          {/* Stats row */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', borderBottom: '0.5px solid #f0f0f0' }}>
+            {[
+              { label: 'Εκκρεμείς παρ.', val: plan.pendingOrders.toLocaleString(), color: '#1a1a1a' },
+              { label: 'Capacity/h', val: `${plan.totalCapacity}`, color: sc },
+              { label: 'Στόχος/h', val: `${plan.neededCapacity}`, color: '#3b82f6' },
+              { label: 'Διαφορά', val: `${plan.totalCapacity - plan.neededCapacity > 0 ? '+' : ''}${plan.totalCapacity - plan.neededCapacity}`, color: plan.totalCapacity >= plan.neededCapacity ? '#22c55e' : '#ef4444' },
+            ].map(({ label, val, color }) => (
+              <div key={label} style={{ padding: '12px 14px', borderRight: '0.5px solid #f0f0f0' }}>
+                <div style={{ fontSize: 9, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>{label}</div>
+                <div style={{ fontSize: 16, fontWeight: 500, color, fontFamily: 'monospace' }}>{val}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Zone assignments */}
+          {ZONE_SECTION.map(section => {
+            const sectionItems = section.zones.flatMap(z => (groups as Record<string, PlanAssignment[]>)[z] ?? [])
+            if (sectionItems.length === 0) return null
+            const sectionCapacity = sectionItems.filter(a => a.employee.role === 'packer').reduce((s, a) => s + a.uph, 0)
+            return (
+              <div key={section.key} style={{ borderTop: '0.5px solid #f0f0f0' }}>
+                <div style={{ background: section.bg, padding: '8px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: section.color }}>{section.title}</div>
+                  {sectionCapacity > 0 && <div style={{ fontSize: 10, color: '#9ca3af' }}>{sectionCapacity} παρ/ώρα</div>}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: '0.5px', background: '#f9f9f7' }}>
+                  {sectionItems.map((a, i) => <AssignmentCard key={i} a={a} />)}
+                </div>
+              </div>
+            )
+          })}
+        </>
+      )}
+    </div>
+  )
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export function PlanningPage() {
   const employees = useAppStore(s => s.employees)
 
-  const [step, setStep] = useState<1 | 2 | 3>(1)
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
-  const [parsedEmployees, setParsedEmployees] = useState<ParsedEmployee[]>([])
-  const [selectedDate, setSelectedDate] = useState(() => {
-    const d = new Date()
-    return d.toISOString().split('T')[0]
-  })
-  const [input, setInput] = useState<PlanningInput>({
-    due_date_orders: 0,
-    intraday_orders: 0,
-    due_date_backlog: 0,
-    current_time: new Date().toTimeString().slice(0, 5),
-    break1: '10:00',
-    break2: '13:00',
-  })
-  const [result, setResult] = useState<ReturnType<typeof runAlgorithm> | null>(null)
-  const [uploading, setUploading] = useState(false)
+  const [step, setStep] = useState<1 | 2>(1)
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [papakiasFile, setPapakiasFile] = useState<File | null>(null)
+  const [overviewFile, setOverviewFile] = useState<File | null>(null)
+  const [throughputFile, setThroughputFile] = useState<File | null>(null)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const fileRef = useRef<HTMLInputElement>(null)
-  const printRef = useRef<HTMLDivElement>(null)
+  const [plans, setPlans] = useState<ShiftPlan[]>([])
+  const [expandedPlan, setExpandedPlan] = useState<number>(0)
+  const [overviewData, setOverviewData] = useState<OverviewData | null>(null)
 
-  // ── Step 1: Upload ──
-  async function handleFile(file: File) {
-    setUploading(true)
+  const papakiasRef = useRef<HTMLInputElement>(null)
+  const overviewRef = useRef<HTMLInputElement>(null)
+  const throughputRef = useRef<HTMLInputElement>(null)
+
+  async function handleGenerate() {
+    if (!papakiasFile || !overviewFile || !throughputFile) {
+      setError('Ανέβασε και τα 3 αρχεία')
+      return
+    }
+    setLoading(true)
     setError('')
     try {
       const date = new Date(selectedDate + 'T12:00:00')
-      const parsed = await parsePapakiasExcel(file, date)
-      if (parsed.length === 0) {
-        setError('Δεν βρέθηκαν εργαζόμενοι για αυτή την ημέρα (όλοι day_off)')
-        setUploading(false)
-        return
-      }
-      setUploadedFile(file)
-      setParsedEmployees(parsed)
+      const [emps, ov, tp] = await Promise.all([
+        parsePapakias(papakiasFile, date),
+        parseOverview(overviewFile),
+        parseThroughput(throughputFile, date.getDay()),
+      ])
+      if (emps.length === 0) { setError('Δεν βρέθηκαν εργαζόμενοι για αυτή την ημέρα'); setLoading(false); return }
+      setOverviewData(ov)
+      const shiftPlans = buildShiftPlans(emps, employees, ov, tp)
+      setPlans(shiftPlans)
       setStep(2)
     } catch (e) {
-      setError('Σφάλμα ανάγνωσης αρχείου')
+      setError('Σφάλμα ανάγνωσης αρχείων — έλεγξε ότι ανέβασες τα σωστά')
     }
-    setUploading(false)
+    setLoading(false)
   }
-
-  // ── Step 2: Calculate ──
-  function handleCalculate() {
-    const res = runAlgorithm(parsedEmployees, employees, input)
-    setResult(res)
-    setStep(3)
-  }
-
-  // ── Print ──
-  function handlePrint() {
-    window.print()
-  }
-
-  const inp = (field: keyof PlanningInput, val: string | number) =>
-    setInput(prev => ({ ...prev, [field]: val }))
 
   const inputStyle: React.CSSProperties = {
     border: '0.5px solid #e5e5e5', borderRadius: 8,
     padding: '8px 12px', fontSize: 13, outline: 'none',
-    fontFamily: 'Inter, sans-serif', width: '100%',
-    color: '#1a1a1a', background: 'white',
+    fontFamily: 'Inter, sans-serif', width: '100%', color: '#1a1a1a', background: 'white',
   }
 
-  // ── Group assignments by zone ──
-  const groupedAssignments = () => {
-    if (!result) return []
-    const groups: Record<string, Assignment[]> = {}
-    for (const a of result.assignments) {
-      if (!groups[a.zone]) groups[a.zone] = []
-      groups[a.zone].push(a)
-    }
-    return groups
+  function UploadBox({ label, hint, file, onFile, inputRef, color }: {
+    label: string; hint: string; file: File | null; onFile: (f: File) => void
+    inputRef: React.RefObject<HTMLInputElement>; color: string
+  }) {
+    return (
+      <div onClick={() => inputRef.current?.click()} style={{
+        border: `1.5px dashed ${file ? color : '#e5e5e5'}`, borderRadius: 12,
+        padding: '18px 16px', cursor: 'pointer', textAlign: 'center',
+        background: file ? '#fafffe' : '#fafafa', transition: 'all 0.15s',
+      }}
+      onMouseEnter={e => (e.currentTarget.style.borderColor = color)}
+      onMouseLeave={e => (e.currentTarget.style.borderColor = file ? color : '#e5e5e5')}
+      >
+        <div style={{ fontSize: 22, marginBottom: 6 }}>{file ? '✅' : '📂'}</div>
+        <div style={{ fontSize: 12, fontWeight: 500, color: '#1a1a1a', marginBottom: 2 }}>{label}</div>
+        <div style={{ fontSize: 10, color: '#9ca3af' }}>{file ? file.name : hint}</div>
+        <input ref={inputRef} type="file" accept=".xlsx" style={{ display: 'none' }}
+          onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f) }} />
+      </div>
+    )
   }
 
   return (
@@ -364,303 +544,95 @@ export function PlanningPage() {
         <div style={{ fontSize: 11, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Προγραμματισμός</div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 24, fontWeight: 500, color: '#1a1a1a' }}>Daily Planning</div>
-          {step === 3 && (
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => { setStep(1); setResult(null); setParsedEmployees([]); setUploadedFile(null) }}
-                style={{ border: '0.5px solid #e5e5e5', background: 'white', padding: '8px 16px', borderRadius: 20, fontSize: 12, cursor: 'pointer' }}>
-                ← Νέο Πλάνο
-              </button>
-              <button onClick={handlePrint}
-                style={{ background: '#1a1a1a', color: 'white', border: 'none', padding: '8px 18px', borderRadius: 20, fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
-                🖨️ Print PDF
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Steps */}
-        <div style={{ display: 'flex', gap: 6, marginTop: 14, alignItems: 'center' }}>
-          {['Upload Πρόγραμμα', 'Παραγγελίες & Ώρες', 'Πλάνο Βάρδιας'].map((label, i) => {
-            const s = i + 1
-            const active = step === s
-            const done = step > s
-            return (
-              <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 7,
-                  background: active ? '#1a1a1a' : done ? '#f0fdf4' : '#f9f9f7',
-                  borderRadius: 20, padding: '4px 12px 4px 6px',
-                }}>
-                  <div style={{
-                    width: 20, height: 20, borderRadius: '50%',
-                    background: active ? 'white' : done ? '#22c55e' : '#e5e5e5',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 10, fontWeight: 600,
-                    color: active ? '#1a1a1a' : done ? 'white' : '#9ca3af',
-                  }}>{done ? '✓' : s}</div>
-                  <span style={{ fontSize: 11, fontWeight: 500, color: active ? 'white' : done ? '#15803d' : '#9ca3af' }}>{label}</span>
-                </div>
-                {i < 2 && <span style={{ color: '#e5e5e5', fontSize: 14 }}>→</span>}
-              </div>
-            )
-          })}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {step === 2 && (
+              <>
+                <button onClick={() => { setStep(1); setPlans([]) }} style={{ border: '0.5px solid #e5e5e5', background: 'white', padding: '8px 16px', borderRadius: 20, fontSize: 12, cursor: 'pointer', color: '#1a1a1a' }}>
+                  ← Νέο Πλάνο
+                </button>
+                <button onClick={() => window.print()} style={{ background: '#1a1a1a', color: 'white', border: 'none', padding: '8px 18px', borderRadius: 20, fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
+                  🖨️ Print PDF
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
 
         {/* ── STEP 1: Upload ── */}
         {step === 1 && (
-          <div style={{ maxWidth: 560, margin: '0 auto' }}>
-            <div style={{ background: 'white', borderRadius: 16, border: '0.5px solid #e5e5e5', padding: 28 }}>
-              <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 6, color: '#1a1a1a' }}>Ημερομηνία βάρδιας</div>
-              <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 14 }}>Επίλεξε για ποια μέρα θέλεις να βγάλεις πλάνο</div>
-              <input type="date" value={selectedDate}
-                onChange={e => setSelectedDate(e.target.value)}
-                style={{ ...inputStyle, marginBottom: 24 }}
-              />
-
-              <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 6, color: '#1a1a1a' }}>Αρχείο Papakias</div>
-              <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 14 }}>Ανέβασε το εβδομαδιαίο πρόγραμμα από το Papakias (xlsx)</div>
-
-              <div
-                onClick={() => fileRef.current?.click()}
-                onDragOver={e => e.preventDefault()}
-                onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
-                style={{
-                  border: '1.5px dashed #e5e5e5', borderRadius: 12, padding: '32px 24px',
-                  textAlign: 'center', cursor: 'pointer', transition: 'border-color 0.15s',
-                  background: '#fafafa',
-                }}
-                onMouseEnter={e => (e.currentTarget.style.borderColor = '#1a1a1a')}
-                onMouseLeave={e => (e.currentTarget.style.borderColor = '#e5e5e5')}
-              >
-                <div style={{ fontSize: 28, marginBottom: 8 }}>📂</div>
-                <div style={{ fontSize: 13, fontWeight: 500, color: '#1a1a1a', marginBottom: 4 }}>
-                  {uploading ? 'Φόρτωση...' : 'Drag & Drop ή κλικ'}
-                </div>
-                <div style={{ fontSize: 11, color: '#9ca3af' }}>fbs_papakias_view_*.xlsx</div>
-                <input ref={fileRef} type="file" accept=".xlsx" style={{ display: 'none' }}
-                  onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
-              </div>
-
-              {error && (
-                <div style={{ marginTop: 12, padding: '10px 14px', background: '#fef2f2', borderRadius: 8, fontSize: 12, color: '#ef4444' }}>
-                  {error}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ── STEP 2: Orders ── */}
-        {step === 2 && (
-          <div style={{ maxWidth: 680, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-            {/* Employees preview */}
-            <div style={{ background: 'white', borderRadius: 16, border: '0.5px solid #e5e5e5', padding: 20 }}>
-              <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 14, color: '#1a1a1a' }}>
-                Εργαζόμενοι σήμερα — {parsedEmployees.length} άτομα
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-                {parsedEmployees.map((p, i) => {
-                  const rc = ROLE_COLOR[p.role] ?? ROLE_COLOR.packer
-                  return (
-                    <div key={i} style={{
-                      display: 'flex', alignItems: 'center', gap: 6,
-                      background: rc.bg, borderRadius: 20, padding: '4px 10px 4px 6px',
-                    }}>
-                      <div style={{
-                        width: 22, height: 22, borderRadius: '50%', background: rc.color,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 9, fontWeight: 600, color: 'white',
-                      }}>{initials(p.full_name)}</div>
-                      <div>
-                        <div style={{ fontSize: 11, fontWeight: 500, color: '#1a1a1a' }}>
-                          {p.full_name.split(' ').slice(0, 2).join(' ')}
-                        </div>
-                        <div style={{ fontSize: 9, color: '#9ca3af' }}>{p.shift}</div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
+          <div style={{ maxWidth: 640, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ background: 'white', borderRadius: 16, border: '0.5px solid #e5e5e5', padding: 24 }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: '#1a1a1a', marginBottom: 14 }}>Ημερομηνία βάρδιας</div>
+              <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} style={inputStyle} />
             </div>
 
-            {/* Orders input */}
-            <div style={{ background: 'white', borderRadius: 16, border: '0.5px solid #e5e5e5', padding: 20 }}>
-              <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 16, color: '#1a1a1a' }}>Παραγγελίες ημέρας</div>
+            <div style={{ background: 'white', borderRadius: 16, border: '0.5px solid #e5e5e5', padding: 24 }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: '#1a1a1a', marginBottom: 6 }}>Ανέβασε τα 3 αρχεία</div>
+              <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 16 }}>Papakias + Overview (τρέχουσα κατάσταση) + Throughput χθες</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                {[
-                  { key: 'due_date_orders', label: 'Due Date (νέες)', hint: 'Παρ. έως 19:00', color: '#3b82f6' },
-                  { key: 'due_date_backlog', label: 'Backlog', hint: 'Εκκρεμείς Due Date', color: '#f97316' },
-                  { key: 'intraday_orders', label: 'Intraday', hint: 'Παρ. έως 01:30', color: '#8b5cf6' },
-                ].map(({ key, label, hint, color }) => (
-                  <div key={key}>
-                    <div style={{ fontSize: 11, fontWeight: 500, color, marginBottom: 4 }}>{label}</div>
-                    <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 6 }}>{hint}</div>
-                    <input
-                      type="number" min={0}
-                      value={(input as any)[key]}
-                      onChange={e => inp(key as keyof PlanningInput, parseInt(e.target.value) || 0)}
-                      style={inputStyle}
-                    />
-                  </div>
-                ))}
+                <UploadBox label="Papakias" hint="fbs_papakias_view_*.xlsx" file={papakiasFile} onFile={setPapakiasFile} inputRef={papakiasRef} color="#1a1a1a" />
+                <UploadBox label="Overview" hint="overview.xlsx" file={overviewFile} onFile={setOverviewFile} inputRef={overviewRef} color="#3b82f6" />
+                <UploadBox label="Throughput" hint="throughput_*.xlsx" file={throughputFile} onFile={setThroughputFile} inputRef={throughputRef} color="#22c55e" />
               </div>
             </div>
 
-            {/* Time & Breaks */}
-            <div style={{ background: 'white', borderRadius: 16, border: '0.5px solid #e5e5e5', padding: 20 }}>
-              <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 16, color: '#1a1a1a' }}>Ώρα & Διαλείμματα</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                {[
-                  { key: 'current_time', label: 'Τρέχουσα ώρα', type: 'time' },
-                  { key: 'break1', label: '1ο Διάλειμμα (30\')', type: 'time' },
-                  { key: 'break2', label: '2ο Διάλειμμα (30\')', type: 'time' },
-                ].map(({ key, label, type }) => (
-                  <div key={key}>
-                    <div style={{ fontSize: 11, fontWeight: 500, color: '#6b7280', marginBottom: 6 }}>{label}</div>
-                    <input
-                      type={type}
-                      value={(input as any)[key]}
-                      onChange={e => inp(key as keyof PlanningInput, e.target.value)}
-                      style={inputStyle}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
+            {error && <div style={{ padding: '10px 14px', background: '#fef2f2', borderRadius: 8, fontSize: 12, color: '#ef4444' }}>{error}</div>}
 
-            <button onClick={handleCalculate} style={{
-              background: '#1a1a1a', color: 'white', border: 'none',
-              padding: '14px', borderRadius: 12, fontSize: 14, fontWeight: 500,
-              cursor: 'pointer', width: '100%',
-            }}>
-              Δημιουργία Πλάνου →
+            <button onClick={handleGenerate} disabled={loading || !papakiasFile || !overviewFile || !throughputFile}
+              style={{ background: (!papakiasFile || !overviewFile || !throughputFile) ? '#e5e5e5' : '#1a1a1a', color: 'white', border: 'none', padding: '14px', borderRadius: 12, fontSize: 14, fontWeight: 500, cursor: 'pointer', width: '100%' }}>
+              {loading ? 'Επεξεργασία...' : 'Δημιουργία Πλάνου →'}
             </button>
           </div>
         )}
 
-        {/* ── STEP 3: Plan ── */}
-        {step === 3 && result && (
-          <div ref={printRef} style={{ maxWidth: 900, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {/* ── STEP 2: Plans ── */}
+        {step === 2 && plans.length > 0 && (
+          <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-            {/* Summary bar */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-              {[
-                { label: 'Εργαζόμενοι', val: parsedEmployees.length, color: '#1a1a1a' },
-                { label: 'Packing capacity', val: `${result.totalCapacity}/h`, color: '#22c55e' },
-                { label: 'Στόχος', val: `${result.needed}/h`, color: '#3b82f6' },
-                { label: 'Κατάσταση', val: result.totalCapacity >= result.needed ? '✅ OK' : '⚠️ Έλλειμμα', color: result.totalCapacity >= result.needed ? '#22c55e' : '#ef4444' },
-              ].map(({ label, val, color }) => (
-                <div key={label} style={{ background: 'white', borderRadius: 12, border: '0.5px solid #e5e5e5', padding: '14px 16px' }}>
-                  <div style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>{label}</div>
-                  <div style={{ fontSize: 20, fontWeight: 500, color }}>{val}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* AI Summary */}
-            <div style={{ background: '#f9f9f7', borderRadius: 12, border: '0.5px solid #e5e5e5', padding: '14px 18px' }}>
-              <div style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Ανάλυση Πλάνου</div>
-              {result.summary.map((s, i) => (
-                <div key={i} style={{ fontSize: 13, color: '#1a1a1a', marginBottom: 4 }}>{s}</div>
-              ))}
-              <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 6 }}>
-                Διαλείμματα: {input.break1} και {input.break2} (30 λεπτά)
-              </div>
-            </div>
-
-            {/* Assignments by zone */}
-            {(() => {
-              const groups = groupedAssignments()
-              const zoneOrder = ['AutoStore', 'Picking', 'OG1', 'RED1', 'RED2', 'RED3', 'RED4', 'L1', 'L2', 'L3', 'L4', 'L5', 'Sorting', 'Validator']
-
-              // Group red together, green together
-              const sections: { title: string; color: string; bg: string; zones: string[] }[] = [
-                { title: 'AutoStore', color: '#06b6d4', bg: '#ecfeff', zones: ['AutoStore'] },
-                { title: 'Picking', color: '#3b82f6', bg: '#eff6ff', zones: ['Picking'] },
-                { title: '🟡 Ογκώδη', color: '#f59e0b', bg: '#fffbeb', zones: ['OG1'] },
-                { title: '🔴 Κόκκινη Ζώνη', color: '#ef4444', bg: '#fef2f2', zones: ['RED1', 'RED2', 'RED3', 'RED4'] },
-                { title: '🟢 Πράσινη Ζώνη', color: '#22c55e', bg: '#f0fdf4', zones: ['L1', 'L2', 'L3', 'L4', 'L5'] },
-                { title: 'Sorting / Palletizing', color: '#f97316', bg: '#fff7ed', zones: ['Sorting'] },
-                { title: 'Validators (διαθέσιμοι)', color: '#8b5cf6', bg: '#f5f3ff', zones: ['Validator'] },
-              ]
-
-              return sections.map(section => {
-                const sectionAssignments = section.zones.flatMap(z => (groups as Record<string, Assignment[]>)[z] ?? [])
-                if (sectionAssignments.length === 0) return null
-
-                return (
-                  <div key={section.title} style={{ background: 'white', borderRadius: 12, border: '0.5px solid #e5e5e5', overflow: 'hidden' }}>
-                    <div style={{ background: section.bg, borderBottom: '0.5px solid #e5e5e5', padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div style={{ fontSize: 13, fontWeight: 500, color: section.color }}>{section.title}</div>
-                      <div style={{ fontSize: 11, color: '#9ca3af' }}>
-                        {sectionAssignments.filter(a => a.role === 'packer').reduce((s, a) => s + a.uph, 0) > 0
-                          ? `${sectionAssignments.filter(a => a.role === 'packer').reduce((s, a) => s + a.uph, 0)} παρ/ώρα`
-                          : `${sectionAssignments.length} άτομα`}
-                      </div>
+            {/* Overview summary */}
+            {overviewData && (
+              <div style={{ background: 'white', borderRadius: 12, border: '0.5px solid #e5e5e5', padding: '14px 18px' }}>
+                <div style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>Τρέχουσα Κατάσταση Αποθήκης</div>
+                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                  {[
+                    { label: 'Πολυγρ. (Ράφι)', val: overviewData.proetoimasia.poly },
+                    { label: 'Μονογρ. (Ράφι)', val: overviewData.proetoimasia.mono },
+                    { label: 'AutoStore', val: overviewData.proetoimasia.autostore },
+                    { label: 'Picked AS', val: overviewData.proetoimasia.picked_as },
+                    { label: 'Ογκώδη', val: overviewData.proetoimasia.ogkodi },
+                  ].map(({ label, val }) => (
+                    <div key={label} style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: 9, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 }}>{label}</div>
+                      <div style={{ fontSize: 18, fontWeight: 500, color: '#1a1a1a', fontFamily: 'monospace' }}>{val.toLocaleString()}</div>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 1, background: '#f9f9f7' }}>
-                      {sectionAssignments.map((a, i) => {
-                        const rc = ROLE_COLOR[a.role] ?? ROLE_COLOR.packer
-                        const skill = a.employee.skill_level
-                        const skillLabel = SKILL_LABELS[skill as keyof typeof SKILL_LABELS]
-                        return (
-                          <div key={i} style={{ background: 'white', padding: '12px 14px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                              <div style={{
-                                width: 36, height: 36, borderRadius: '50%', background: rc.color,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontSize: 12, fontWeight: 500, color: 'white', flexShrink: 0,
-                              }}>{initials(a.employee.full_name)}</div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 12, fontWeight: 500, color: '#1a1a1a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {a.employee.full_name.split(' ').slice(0, 2).join(' ')}
-                                </div>
-                                <div style={{ fontSize: 10, color: '#9ca3af' }}>{a.shift}</div>
-                              </div>
-                              <div style={{ fontSize: 11, fontWeight: 600, color: rc.color, background: rc.bg, padding: '2px 8px', borderRadius: 20, flexShrink: 0 }}>
-                                {a.position}
-                              </div>
-                            </div>
-                            <div style={{ display: 'flex', gap: 6 }}>
-                              <span style={{ fontSize: 10, color: '#9ca3af', background: '#f9f9f7', padding: '2px 7px', borderRadius: 10 }}>
-                                {skillLabel}
-                              </span>
-                              {a.uph > 0 && (
-                                <span style={{ fontSize: 10, color: '#9ca3af', background: '#f9f9f7', padding: '2px 7px', borderRadius: 10, fontFamily: 'monospace' }}>
-                                  {a.uph} u/h
-                                </span>
-                              )}
-                              {a.withValidator && (
-                                <span style={{ fontSize: 10, color: '#8b5cf6', background: '#f5f3ff', padding: '2px 7px', borderRadius: 10 }}>
-                                  +{a.withValidator.split(' ')[0]}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        )
-                      })}
+                  ))}
+                  <div style={{ textAlign: 'center', borderLeft: '0.5px solid #f0f0f0', paddingLeft: 16 }}>
+                    <div style={{ fontSize: 9, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 }}>Σύνολο Εκκρεμών</div>
+                    <div style={{ fontSize: 18, fontWeight: 500, color: '#3b82f6', fontFamily: 'monospace' }}>
+                      {(overviewData.proetoimasia.poly + overviewData.proetoimasia.mono + overviewData.proetoimasia.picked_as + overviewData.proetoimasia.ogkodi).toLocaleString()}
                     </div>
                   </div>
-                )
-              })
-            })()}
+                </div>
+              </div>
+            )}
+
+            {/* Shift plans */}
+            {plans.map((plan, i) => (
+              <ShiftPlanCard
+                key={plan.time}
+                plan={plan}
+                expanded={expandedPlan === i}
+                onToggle={() => setExpandedPlan(expandedPlan === i ? -1 : i)}
+              />
+            ))}
           </div>
         )}
       </div>
 
-      {/* Print styles */}
-      <style>{`
-        @media print {
-          body * { visibility: hidden; }
-          #print-area, #print-area * { visibility: visible; }
-          #print-area { position: absolute; left: 0; top: 0; width: 100%; }
-        }
-      `}</style>
+      <style>{`@media print { body * { visibility: hidden; } .print-area, .print-area * { visibility: visible; } }`}</style>
     </div>
   )
 }
