@@ -60,3 +60,4 @@ export function AllocationTable({ roleCapacity }: { roleCapacity: RoleCapacity[]
     </div>
   )
 }
+
