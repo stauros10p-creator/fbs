@@ -47,12 +47,15 @@ export function SchedulePage() {
   })
   const today = new Date().toISOString().split('T')[0]
 
-  // Employees absent today (sick/vacation/off) = in employees list but NOT in shifts
-  const shiftEmployeeIds = new Set(shifts.map(s => s.employee_id))
-  const absentEmployees = employees.filter(e =>
-    ['sick', 'vacation', 'off'].includes(e.current_status) ||
-    (!shiftEmployeeIds.has(e.id) && e.current_status !== 'working' && e.current_status !== 'redeployed')
+  // Absent = employees not in today's shifts
+  const shiftNames = new Set(
+    shifts.map(s => s.employee?.full_name).filter((n): n is string => !!n)
   )
+  const shiftIds = new Set(shifts.map(s => s.employee_id).filter(Boolean))
+  const absentEmployees = isLoading ? [] : employees.filter(e => {
+    const matched = shiftNames.size > 0 ? shiftNames.has(e.full_name) : shiftIds.has(e.id)
+    return !matched
+  })
 
   // Filter shifts
   const filtered = shifts.filter(s => {
