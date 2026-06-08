@@ -1,31 +1,31 @@
 import { useState } from 'react'
 import { useAppStore } from '@/store'
 import { ROLE_CONFIG, SKILL_LABELS, STATUS_CONFIG } from '@/types'
-import type { Employee } from '@/types'
+import type { Employee, EmployeeRole, EmployeeStatus, SkillLevel } from '@/types'
 import { supabase } from '@/lib/supabase'
 
 // ── Skill thresholds ──────────────────────────────────────────────────────────
-function calcSkillLevel(role: string, uph: number): string {
+function calcSkillLevel(role: string, uph: number): SkillLevel {
   if (role === 'packer') {
     if (uph > 90)  return '5'
     if (uph >= 70) return '4'
     if (uph >= 55) return '3'
     if (uph >= 40) return '2'
-    return '1'
+    return '1' as SkillLevel
   }
   if (role === 'picker') {
     if (uph > 130)  return '5'
     if (uph >= 110) return '4'
     if (uph >= 90)  return '3'
     if (uph >= 75)  return '2'
-    return '1'
+    return '1' as SkillLevel
   }
   if (role === 'operator') {
     if (uph > 225)  return '5'
     if (uph >= 205) return '4'
     if (uph >= 185) return '3'
     if (uph >= 160) return '2'
-    return '1'
+    return '1' as SkillLevel
   }
   // Default for other roles
   if (uph > 120) return '5'
@@ -69,7 +69,14 @@ function EditModal({ emp, onClose, onSaved }: {
   onClose: () => void
   onSaved: (updated: Partial<Employee>) => void
 }) {
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    full_name: string
+    primary_role: EmployeeRole
+    secondary_role: EmployeeRole | ''
+    tertiary_role:  EmployeeRole | ''
+    current_status: EmployeeStatus
+    skill_level: SkillLevel
+  }>({
     full_name:      emp.full_name,
     primary_role:   emp.primary_role,
     secondary_role: emp.secondary_role ?? '',
@@ -79,7 +86,7 @@ function EditModal({ emp, onClose, onSaved }: {
   })
 
   // Per-role skill overrides (from productivity or manual)
-  const [roleSkills, setRoleSkills] = useState<Record<string, string>>(() => {
+  const [roleSkills, setRoleSkills] = useState<Record<string, SkillLevel>>(() => {
     const map: Record<string, string> = {}
     emp.productivity?.forEach(p => {
       map[p.role] = calcSkillLevel(p.role, p.units_per_hour)
@@ -109,11 +116,11 @@ function EditModal({ emp, onClose, onSaved }: {
 
       const updates = {
         full_name:      form.full_name,
-        primary_role:   form.primary_role,
-        secondary_role: form.secondary_role || null,
-        tertiary_role:  form.tertiary_role  || null,
-        current_status: form.current_status,
-        skill_level:    finalSkill,
+        primary_role:   form.primary_role as EmployeeRole,
+        secondary_role: (form.secondary_role || null) as EmployeeRole | null,
+        tertiary_role:  (form.tertiary_role  || null) as EmployeeRole | null,
+        current_status: form.current_status as EmployeeStatus,
+        skill_level:    finalSkill as SkillLevel,
       }
 
       const { error: err } = await supabase
@@ -183,7 +190,7 @@ function EditModal({ emp, onClose, onSaved }: {
           {/* Status */}
           <div>
             <label style={labelStyle}>Status</label>
-            <select value={form.current_status} onChange={e => setForm(f => ({ ...f, current_status: e.target.value }))} style={inputStyle}>
+            <select value={form.current_status} onChange={e => setForm(f => ({ ...f, current_status: e.target.value as EmployeeStatus }))} style={inputStyle}>
               {statuses.map(s => <option key={s.val} value={s.val}>{s.label}</option>)}
             </select>
           </div>
@@ -192,13 +199,13 @@ function EditModal({ emp, onClose, onSaved }: {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
               <label style={labelStyle}>Primary Role ★</label>
-              <select value={form.primary_role} onChange={e => setForm(f => ({ ...f, primary_role: e.target.value }))} style={inputStyle}>
+              <select value={form.primary_role} onChange={e => setForm(f => ({ ...f, primary_role: e.target.value as EmployeeRole }))} style={inputStyle}>
                 {roles.map(([key, cfg]) => <option key={key} value={key}>{cfg.label}</option>)}
               </select>
             </div>
             <div>
               <label style={labelStyle}>Secondary Role</label>
-              <select value={form.secondary_role} onChange={e => setForm(f => ({ ...f, secondary_role: e.target.value }))} style={inputStyle}>
+              <select value={form.secondary_role} onChange={e => setForm(f => ({ ...f, secondary_role: e.target.value as EmployeeRole | '' }))} style={inputStyle}>
                 <option value="">— Κανένας —</option>
                 {roles.map(([key, cfg]) => <option key={key} value={key}>{cfg.label}</option>)}
               </select>
@@ -207,7 +214,7 @@ function EditModal({ emp, onClose, onSaved }: {
 
           <div>
             <label style={labelStyle}>Tertiary Role</label>
-            <select value={form.tertiary_role} onChange={e => setForm(f => ({ ...f, tertiary_role: e.target.value }))} style={inputStyle}>
+            <select value={form.tertiary_role} onChange={e => setForm(f => ({ ...f, tertiary_role: e.target.value as EmployeeRole | '' }))} style={inputStyle}>
               <option value="">— Κανένας —</option>
               {roles.map(([key, cfg]) => <option key={key} value={key}>{cfg.label}</option>)}
             </select>
@@ -231,7 +238,7 @@ function EditModal({ emp, onClose, onSaved }: {
                       {/* Manual override stars */}
                       <div style={{ display: 'flex', gap: 3 }}>
                         {[1,2,3,4,5].map(i => (
-                          <div key={i} onClick={() => setRoleSkills(rs => ({ ...rs, [p.role]: String(i) }))}
+                          <div key={i} onClick={() => setRoleSkills(rs => ({ ...rs, [p.role]: String(i) as SkillLevel }))}
                             style={{
                               width: 20, height: 20, borderRadius: '50%', cursor: 'pointer',
                               background: i <= parseInt(current) ? sc.color : '#e5e7eb',
@@ -257,7 +264,7 @@ function EditModal({ emp, onClose, onSaved }: {
                       const active = parseInt(form.skill_level) >= i
                       const sc = SKILL_COLORS[form.skill_level] ?? SKILL_COLORS['3']
                       return (
-                        <div key={i} onClick={() => setForm(f => ({ ...f, skill_level: String(i) }))}
+                        <div key={i} onClick={() => setForm(f => ({ ...f, skill_level: String(i) as SkillLevel }))}
                           style={{
                             width: 32, height: 32, borderRadius: 8, cursor: 'pointer',
                             background: active ? sc.color : '#f0f0f0',
@@ -514,13 +521,13 @@ export function TeamPage() {
   const onBreak = employees.filter(e => e.current_status === 'break').length
   const sick    = employees.filter(e => e.current_status === 'sick').length
 
-  function handleSaved(updated: Partial<Employee>) {
+  function handleSaved(updated: Partial<Employee> & { primary_role?: EmployeeRole; secondary_role?: EmployeeRole | null; tertiary_role?: EmployeeRole | null; current_status?: EmployeeStatus; skill_level?: SkillLevel }) {
     if (!editing) return
     const newList = employees.map(e =>
-      e.id === editing.id ? { ...e, ...updated } : e
+      e.id === editing.id ? { ...e, ...updated } as Employee : e
     )
     setEmployees(newList)
-    if (selected?.id === editing.id) setSelected(prev => prev ? { ...prev, ...updated } : prev)
+    if (selected?.id === editing.id) setSelected(prev => prev ? { ...prev, ...updated } as Employee : prev)
   }
 
   const inputStyle: React.CSSProperties = {

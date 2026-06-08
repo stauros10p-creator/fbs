@@ -25,6 +25,7 @@ interface AppStore {
   addAlert: (a: Alert) => void
   acknowledgeAlert: (id: string) => void
   updateEmployeeStatus: (id: string, status: Employee['current_status']) => void
+  updateEmployee: (id: string, updates: Partial<Employee>) => void
 
   // Engine
   recomputeEngine: () => void
@@ -62,12 +63,25 @@ export const useAppStore = create<AppStore>((set, get) => ({
   })),
 
   acknowledgeAlert: (id) => set(state => ({
-    alerts: state.alerts.map(a => a.id === id ? { ...a, acknowledged_at: new Date().toISOString() } : a),
+    alerts: state.alerts.map(a =>
+      a.id === id ? { ...a, acknowledged_at: new Date().toISOString() } : a
+    ),
   })),
 
   updateEmployeeStatus: (id, status) => {
     set(state => ({
-      employees: state.employees.map(e => e.id === id ? { ...e, current_status: status } : e),
+      employees: state.employees.map(e =>
+        e.id === id ? { ...e, current_status: status } : e
+      ),
+    }))
+    get().recomputeEngine()
+  },
+
+  updateEmployee: (id, updates) => {
+    set(state => ({
+      employees: state.employees.map(e =>
+        e.id === id ? { ...e, ...updates } : e
+      ),
     }))
     get().recomputeEngine()
   },
