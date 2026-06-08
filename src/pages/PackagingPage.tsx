@@ -103,7 +103,7 @@ export function PackagingPage() {
     const matchSearch = search === '' ||
       s.kod.toLowerCase().includes(search.toLowerCase()) ||
       s.desc.toLowerCase().includes(search.toLowerCase())
-    const matchFlag = flagFilter === 'all' || s.flag === flagFilter
+    const matchFlag = flagFilter === 'all' || s.flag.includes(flagFilter)
     const matchPkg  = pkgFilter === 'all'  || s.pkg === pkgFilter
     return matchSearch && matchFlag && matchPkg
   })
@@ -190,11 +190,11 @@ export function PackagingPage() {
           {/* Flag filter */}
           <select value={flagFilter} onChange={e => { setFlagFilter(e.target.value); setPage(1) }} style={selectStyle}>
             <option value="all">Όλα τα flags</option>
-            <option value="✅ OK">✅ OK</option>
-            <option value="⚠️ OVERPACK">⚠️ Overpack</option>
-            <option value="🔴 ΔΕΝ ΧΩΡΑΕΙ">🔴 Δεν χωράει</option>
-            <option value="🥃 ΕΎΘΡΑΥΣΤΟ">🥃 Εύθραυστο</option>
-            <option value="📚 ΒΙΒΛΙΟ">📚 Βιβλίο</option>
+            <option value="OK">✅ OK</option>
+            <option value="OVERPACK">⚠️ Overpack</option>
+            <option value="ΧΩΡΑΕΙ">🔴 Δεν χωράει</option>
+            <option value="ΕΎΘΡΑΥΣΤΟ">🥃 Εύθραυστο</option>
+            <option value="ΒΙΒΛΙΟ">📚 Βιβλίο</option>
           </select>
 
           {/* Pkg filter */}
