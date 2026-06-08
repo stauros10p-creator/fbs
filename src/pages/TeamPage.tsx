@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '@/store'
 import { ROLE_CONFIG, SKILL_LABELS, STATUS_CONFIG } from '@/types'
 import type { Employee, EmployeeRole, EmployeeStatus, SkillLevel } from '@/types'
@@ -499,6 +500,7 @@ function EmployeeModal({ emp, onClose, onEdit }: {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export function TeamPage() {
+  const navigate     = useNavigate()
   const employees    = useAppStore(s => s.employees)
   const setEmployees = useAppStore(s => s.setEmployees)
   const [search, setSearch]           = useState('')
@@ -598,7 +600,7 @@ export function TeamPage() {
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 12 }}>
             {filtered.map(emp => (
-              <EmployeeCard key={emp.id} emp={emp} onClick={() => setSelected(emp)} />
+              <EmployeeCard key={emp.id} emp={emp} onClick={() => navigate(`/team/${emp.id}`)} />
             ))}
           </div>
         )}
