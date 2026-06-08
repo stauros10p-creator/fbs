@@ -19,7 +19,6 @@ const NAV_ANALYTICS = [
   { to: '/packaging',    icon: '📦', label: 'Συσκευασία SKUs' },  // ← ΕΔΩ
 ]
 
-]
 
 const S = {
   sidebar: {
