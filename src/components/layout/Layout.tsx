@@ -16,6 +16,9 @@ const NAV_ANALYTICS = [
   { to: '/forecast',     icon: '🔮', label: 'Forecast' },
   { to: '/reports',      icon: '📊', label: 'Reports' },
   { to: '/copilot',      icon: '🤖', label: 'AI Copilot' },
+  { to: '/packaging',    icon: '📦', label: 'Συσκευασία SKUs' },  // ← ΕΔΩ
+]
+
 ]
 
 const S = {
