@@ -87,7 +87,7 @@ function EditModal({ emp, onClose, onSaved }: {
 
   // Per-role skill overrides (from productivity or manual)
   const [roleSkills, setRoleSkills] = useState<Record<string, SkillLevel>>(() => {
-    const map: Record<string, string> = {}
+    const map: Record<string, SkillLevel> = {}
     emp.productivity?.forEach(p => {
       map[p.role] = calcSkillLevel(p.role, p.units_per_hour)
     })
