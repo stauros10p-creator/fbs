@@ -77,6 +77,7 @@ function EditModal({ emp, onClose, onSaved }: {
     tertiary_role:  EmployeeRole | ''
     current_status: EmployeeStatus
     skill_level: SkillLevel
+    notes: string
   }>({
     full_name:      emp.full_name,
     primary_role:   emp.primary_role,
@@ -84,6 +85,7 @@ function EditModal({ emp, onClose, onSaved }: {
     tertiary_role:  emp.tertiary_role  ?? '',
     current_status: emp.current_status,
     skill_level:    emp.skill_level,
+    notes:          emp.notes ?? '',
   })
 
   // Per-role skill overrides (from productivity or manual)
@@ -122,6 +124,7 @@ function EditModal({ emp, onClose, onSaved }: {
         tertiary_role:  (form.tertiary_role  || null) as EmployeeRole | null,
         current_status: form.current_status as EmployeeStatus,
         skill_level:    finalSkill as SkillLevel,
+        notes:          form.notes || null,
       }
 
       const { error: err } = await supabase
@@ -186,6 +189,14 @@ function EditModal({ emp, onClose, onSaved }: {
           <div>
             <label style={labelStyle}>Ονοματεπώνυμο</label>
             <input value={form.full_name} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))} style={inputStyle} />
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label style={labelStyle}>Σημειώσεις</label>
+            <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+              placeholder="π.χ. Restricted shift, Night only, Single point of failure..."
+              style={{ ...inputStyle, height: 72, resize: 'vertical', verticalAlign: 'top' }} />
           </div>
 
           {/* Status */}
@@ -344,8 +355,14 @@ function EmployeeCard({ emp, onClick }: { emp: Employee; onClick: () => void }) 
           }} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 500, color: '#1a1a1a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 1 }}>{emp.full_name}</div>
-          <div style={{ fontSize: 10, color: '#9ca3af' }}>{emp.employee_code}</div>
+          <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, color: '#1a1a1a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{emp.full_name}</div>
+            {emp.is_team_leader && <span style={{ fontSize: 11, title: 'Team Leader' }}>👑</span>}
+          </div>
+          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+            <span style={{ fontSize: 10, color: '#9ca3af' }}>{emp.employee_code}</span>
+            {emp.is_team_leader && <span style={{ fontSize: 9, fontWeight:600, color:'#f59e0b', background:'#fffbeb', padding:'1px 6px', borderRadius:10 }}>TL</span>}
+          </div>
         </div>
         <div style={{ fontSize: 10, fontWeight: 500, padding: '2px 8px', borderRadius: 20, background: skill.bg, color: skill.text, flexShrink: 0 }}>{skillLabel}</div>
       </div>
@@ -480,6 +497,14 @@ function EmployeeModal({ emp, onClose, onEdit }: {
             <span>Trainee</span><span>Junior</span><span>Standard</span><span>Senior</span><span>Expert</span>
           </div>
         </div>
+
+        {/* Notes */}
+        {emp.notes && (
+          <div style={{ padding: '12px 20px', borderBottom: '0.5px solid #f0f0f0' }}>
+            <div style={{ fontSize: 9, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>📝 Σημειώσεις</div>
+            <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.5 }}>{emp.notes}</div>
+          </div>
+        )}
 
         {/* Actions */}
         <div style={{ padding: '14px 20px', display: 'flex', gap: 8 }}>

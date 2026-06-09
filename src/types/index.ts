@@ -1,4 +1,4 @@
-export type EmployeeRole = 'operator' | 'picker' | 'packer' | 'validator' | 'sorter' | 'transporter'
+export type EmployeeRole = 'operator' | 'picker' | 'packer' | 'validator' | 'sorter' | 'transporter' | 'team_leader'
 export type EmployeeStatus = 'working' | 'break' | 'sick' | 'vacation' | 'off' | 'redeployed'
 export type SkillLevel = '1' | '2' | '3' | '4' | '5'
 export type AlertSeverity = 'info' | 'warning' | 'critical'
@@ -23,6 +23,8 @@ export interface Employee {
   tertiary_role: EmployeeRole | null
   skill_level: SkillLevel
   current_status: EmployeeStatus
+  is_team_leader: boolean
+  notes: string | null
   created_at: string
   updated_at: string
   productivity?: EmployeeProductivity[]
@@ -160,12 +162,13 @@ export interface BreakSafetyResult {
 }
 
 export const ROLE_CONFIG: Record<EmployeeRole, { label: string; short: string; color: string; bg: string }> = {
-  operator:    { label: 'AutoStore', short: 'OP', color: '#06b6d4', bg: '#ecfeff' },
-  picker:      { label: 'Picking',   short: 'PK', color: '#3b82f6', bg: '#eff6ff' },
-  packer:      { label: 'Packing',   short: 'PA', color: '#22c55e', bg: '#f0fdf4' },
-  validator:   { label: 'Validator', short: 'VA', color: '#8b5cf6', bg: '#f5f3ff' },
-  sorter:      { label: 'Sorter',    short: 'SO', color: '#f97316', bg: '#fff7ed' },
-  transporter: { label: 'Transport', short: 'TR', color: '#ec4899', bg: '#fdf2f8' },
+  operator:    { label: 'AutoStore',   short: 'OP', color: '#06b6d4', bg: '#ecfeff' },
+  picker:      { label: 'Picking',     short: 'PK', color: '#3b82f6', bg: '#eff6ff' },
+  packer:      { label: 'Packing',     short: 'PA', color: '#22c55e', bg: '#f0fdf4' },
+  validator:   { label: 'Validator',   short: 'VA', color: '#8b5cf6', bg: '#f5f3ff' },
+  sorter:      { label: 'Sorter',      short: 'SO', color: '#f97316', bg: '#fff7ed' },
+  transporter: { label: 'Transport',   short: 'TR', color: '#ec4899', bg: '#fdf2f8' },
+  team_leader: { label: 'Team Leader', short: 'TL', color: '#f59e0b', bg: '#fffbeb' },
 }
 
 export const STATUS_CONFIG: Record<EmployeeStatus, { label: string; color: string; dot: string }> = {
@@ -186,9 +189,9 @@ export const SKILL_MULTIPLIERS: Record<SkillLevel, number> = {
 }
 
 export const MIN_COVERAGE: Record<EmployeeRole, number> = {
-  operator: 1, picker: 3, packer: 4, validator: 1, sorter: 1, transporter: 2,
+  operator: 1, picker: 3, packer: 4, validator: 1, sorter: 1, transporter: 2, team_leader: 1,
 }
 
 export const DEFAULT_THROUGHPUT: Record<EmployeeRole, number> = {
-  operator: 150, picker: 120, packer: 110, validator: 80, sorter: 150, transporter: 0,
+  operator: 150, picker: 120, packer: 110, validator: 80, sorter: 150, transporter: 0, team_leader: 0,
 }
