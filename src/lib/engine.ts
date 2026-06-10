@@ -108,7 +108,7 @@ export function runAllocationEngine(
 
   // Required staffing
   const requiredMap: Record<EmployeeRole, number> = {
-    operator: 2, picker: 6, packer: 7, validator: 2, sorter: 3, transporter: 3,
+    operator: 2, picker: 6, packer: 7, validator: 2, sorter: 3, transporter: 3, team_leader: 1,
   }
   if (forecast) {
     const total = forecast.due_date_orders + forecast.intraday_orders

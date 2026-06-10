@@ -357,7 +357,7 @@ function EmployeeCard({ emp, onClick }: { emp: Employee; onClick: () => void }) 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display:'flex', alignItems:'center', gap:5 }}>
             <div style={{ fontSize: 13, fontWeight: 500, color: '#1a1a1a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{emp.full_name}</div>
-            {emp.is_team_leader && <span style={{ fontSize: 11, title: 'Team Leader' }}>👑</span>}
+            {emp.is_team_leader && <span title="Team Leader" style={{ fontSize: 11 }}>👑</span>}
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:6 }}>
             <span style={{ fontSize: 10, color: '#9ca3af' }}>{emp.employee_code}</span>
