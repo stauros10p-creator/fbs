@@ -148,6 +148,12 @@ function buildMonthRows(year: number, month: number, notes: CalendarNote[]) {
     const ddStaff  = staffForOrders(forecast.due_date, key)
     const dow      = new Date(key + 'T12:00:00').getDay()
     const hasIntraday = forecast.intraday > 0 && dow !== 5 && dow !== 6
+    // staffForOrders returns combined totals for sorter/transporter (DD + intraday).
+    // Since we split shifts separately, subtract the intraday portion from ddStaff.
+    if (hasIntraday) {
+      ddStaff.sorter      = Math.max(0, ddStaff.sorter - 1)
+      ddStaff.transporter = Math.max(0, ddStaff.transporter - 1)
+    }
     let idStaff: Record<string, number> | null = null
     if (hasIntraday) {
       const asPct = AS_SPLIT[month] ?? 0.85
