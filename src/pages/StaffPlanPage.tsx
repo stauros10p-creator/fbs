@@ -8,28 +8,26 @@ interface CalendarNote {
   adjustment: number
   type: 'increase' | 'decrease' | 'closed' | 'peak' | 'promo' | 'info'
 }
+type StaffMap = Record<string, number>
 
-// ── Constants (mirrored from ForecastPage) ─────────────────────────────────────
+// ── Constants ──────────────────────────────────────────────────────────────────
 const AS_SPLIT: Record<number, number> = {
   6: 0.70, 7: 0.80,
   8: 0.90, 9: 0.90, 10: 0.90, 11: 0.90, 12: 0.90,
-}
-const EFF_HOURS_BY_DOW: Record<number, number> = {
-  0: 8, 1: 13, 2: 13, 3: 13, 4: 13, 5: 15, 6: 8,
 }
 const OPERATOR_UPH = 161
 const PICKER_UPH   = 77
 const PACKER_UPH   = 80
 
 const ROLE_LABELS: Record<string, string> = {
-  picker: 'Picker', packer: 'Packer', sorter: 'Sorter',
-  operator: 'Operator', transporter: 'Transporter',
+  operator: 'Operator', picker: 'Picker', packer: 'Packer',
+  sorter: 'Sorter', transporter: 'Transporter',
 }
 const ROLE_COLORS: Record<string, string> = {
   picker: '#378ADD', packer: '#1D9E75', sorter: '#D85A30',
   operator: '#7F77DD', transporter: '#9ca3af',
 }
-const ROLES = ['picker', 'packer', 'sorter', 'operator', 'transporter']
+const ROLES = ['operator', 'picker', 'packer', 'sorter', 'transporter']
 
 const DD_BASE: Record<number, { mon: number; twt: number; fri: number; sat: number; sun: number }> = {
   6:  { mon: 11267, twt: 10332, fri:  8650, sat:  6055, sun:  7798 },
@@ -63,13 +61,9 @@ const MONTHS_GR: Record<number, string> = {
   6: 'Ιούνιος', 7: 'Ιούλιος', 8: 'Αύγουστος', 9: 'Σεπτέμβριος',
   10: 'Οκτώβριος', 11: 'Νοέμβριος', 12: 'Δεκέμβριος',
 }
-const MONTHS_GEN: Record<number, string> = {
-  6: 'Ιουνίου', 7: 'Ιουλίου', 8: 'Αυγούστου', 9: 'Σεπτεμβρίου',
-  10: 'Οκτωβρίου', 11: 'Νοεμβρίου', 12: 'Δεκεμβρίου',
-}
 const DOW_GR = ['Κυρ', 'Δευ', 'Τρι', 'Τετ', 'Πεμ', 'Παρ', 'Σαβ']
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
+// ── Forecast builder ───────────────────────────────────────────────────────────
 function buildForecast(): Record<string, { total: number; due_date: number; intraday: number }> {
   const out: Record<string, { total: number; due_date: number; intraday: number }> = {}
   const end = new Date('2026-12-31')
@@ -77,31 +71,28 @@ function buildForecast(): Record<string, { total: number; due_date: number; intr
     const key = d.toISOString().slice(0, 10)
     const m = d.getMonth() + 1
     const dow = (d.getDay() + 6) % 7
-
     const ddRow = DD_BASE[m]
     const idRow = INTRADAY_BASE[m]
     const normDD = dow === 0 ? ddRow.mon : dow <= 3 ? ddRow.twt : dow === 4 ? ddRow.fri : dow === 5 ? ddRow.sat : ddRow.sun
     const normID = dow === 0 ? idRow.mon : dow <= 3 ? idRow.twt : dow === 4 ? 0 : dow === 5 ? 0 : idRow.sun
-
     let due_date: number, intraday: number
     if (SPECIAL_DAYS[key] !== undefined) {
-      const special = SPECIAL_DAYS[key]
-      if (special === 0) { due_date = 0; intraday = 0 }
+      const sp = SPECIAL_DAYS[key]
+      if (sp === 0) { due_date = 0; intraday = 0 }
       else {
-        const normTotal = normDD + normID
-        due_date = normTotal > 0 ? Math.round(special * normDD / normTotal) : special
-        intraday = normTotal > 0 ? Math.round(special * normID / normTotal) : 0
+        const nt = normDD + normID
+        due_date = nt > 0 ? Math.round(sp * normDD / nt) : sp
+        intraday = nt > 0 ? Math.round(sp * normID / nt) : 0
       }
     } else {
-      const jitter = 1 + Math.sin(d.getTime() / 86_400_000 * 3.7) * 0.03
-      due_date = Math.round(normDD * jitter)
-      intraday = Math.round(normID * jitter)
+      const j = 1 + Math.sin(d.getTime() / 86_400_000 * 3.7) * 0.03
+      due_date = Math.round(normDD * j)
+      intraday = Math.round(normID * j)
     }
     out[key] = { total: due_date + intraday, due_date, intraday }
   }
   return out
 }
-
 const FORECAST = buildForecast()
 
 function getForDay(key: string, notes: CalendarNote[]) {
@@ -116,64 +107,104 @@ function getForDay(key: string, notes: CalendarNote[]) {
   }
 }
 
-function staffForOrders(orders: number, dateKey?: string): Record<string, number> {
-  const month  = dateKey ? parseInt(dateKey.slice(5, 7)) : undefined
-  const asPct  = month ? (AS_SPLIT[month] ?? 0.85) : 0.85
-  const asOrders = Math.round(orders * asPct)
-  const rafi   = orders - asOrders
-  const dow    = dateKey ? new Date(dateKey + 'T12:00:00').getDay() : 1
-  const H      = EFF_HOURS_BY_DOW[dow] ?? 13
-  const packer = Math.ceil(orders / (PACKER_UPH * H))
-  let sorter = 6, transporter = 2
-  if (dateKey) {
-    if (dow === 6) { sorter = 2; transporter = 1 }
-    else if (dow === 0) { sorter = 3; transporter = 2 }
-    else if (dow === 5) { sorter = 6; transporter = 2 }
-    else { sorter = 7; transporter = 3 }
-  }
+// Per-shift staffing (8h window, fixed sorter/transporter per DD shift)
+function staffForDDShift(halfOrders: number, dateKey: string): StaffMap {
+  const H = 8
+  const month = parseInt(dateKey.slice(5, 7))
+  const asPct = AS_SPLIT[month] ?? 0.85
+  const asOrders = Math.round(halfOrders * asPct)
+  const rafi = halfOrders - asOrders
+  const dow = new Date(dateKey + 'T12:00:00').getDay()
+  // Fixed sorter/transporter per DD shift
+  // Mon-Fri: 3 sorters + 1 transporter per shift (total for 2 shifts = 6s/2t)
+  // Sat/Sun: 1 sorter + 1 transporter per shift
+  const sorter      = (dow === 6 || dow === 0) ? 1 : 3
+  const transporter = (dow === 6 || dow === 0) ? 1 : 1
   return {
-    operator:    Math.max(2, Math.ceil(asOrders / (OPERATOR_UPH * H))),
+    operator:    Math.max(1, Math.ceil(asOrders / (OPERATOR_UPH * H))),
     picker:      Math.max(1, Math.ceil(rafi     / (PICKER_UPH   * H))),
-    packer, sorter, transporter,
+    packer:      Math.max(1, Math.ceil(halfOrders / (PACKER_UPH * H))),
+    sorter,
+    transporter,
   }
 }
 
+function staffForIntraday(idOrders: number, month: number): StaffMap {
+  const H = 8
+  const asPct = AS_SPLIT[month] ?? 0.85
+  const asOrders = Math.round(idOrders * asPct)
+  const rafi = idOrders - asOrders
+  return {
+    operator:    Math.max(1, Math.ceil(asOrders / (OPERATOR_UPH * H))),
+    picker:      Math.max(1, Math.ceil(rafi     / (PICKER_UPH   * H))),
+    packer:      Math.max(1, Math.ceil(idOrders / (PACKER_UPH   * H))),
+    sorter:      1,
+    transporter: 1,
+  }
+}
+
+function total(s: StaffMap) { return Object.values(s).reduce((a, b) => a + b, 0) }
 function fmt(n: number) { return n.toLocaleString('el-GR') }
 
-function buildMonthRows(year: number, month: number, notes: CalendarNote[]) {
+interface DayRow {
+  key: string
+  dow: number
+  forecast: { total: number; due_date: number; intraday: number }
+  s1: StaffMap      // DD Βάρδια 1 (07-15)
+  s2: StaffMap      // DD Βάρδια 2 (13-21)
+  si: StaffMap | null  // Intraday (18-02)
+  hasIntraday: boolean
+  s1Total: number
+  s2Total: number
+  siTotal: number
+  grandTotal: number
+}
+
+function buildMonthRows(year: number, month: number, notes: CalendarNote[]): DayRow[] {
   const daysInMonth = new Date(year, month, 0).getDate()
   return Array.from({ length: daysInMonth }, (_, i) => {
     const key = `${year}-${String(month).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`
     const forecast = getForDay(key, notes)
-    const ddStaff  = staffForOrders(forecast.due_date, key)
-    const dow      = new Date(key + 'T12:00:00').getDay()
+    const dow = new Date(key + 'T12:00:00').getDay()
     const hasIntraday = forecast.intraday > 0 && dow !== 5 && dow !== 6
-    // staffForOrders returns combined totals for sorter/transporter (DD + intraday).
-    // Since we split shifts separately, subtract the intraday portion from ddStaff.
-    if (hasIntraday) {
-      ddStaff.sorter      = Math.max(0, ddStaff.sorter - 1)
-      ddStaff.transporter = Math.max(0, ddStaff.transporter - 1)
-    }
-    let idStaff: Record<string, number> | null = null
-    if (hasIntraday) {
-      const asPct = AS_SPLIT[month] ?? 0.85
-      const asOrders = Math.round(forecast.intraday * asPct)
-      const rafi = forecast.intraday - asOrders
-      idStaff = {
-        operator:    Math.max(1, Math.ceil(asOrders / (OPERATOR_UPH * 8))),
-        picker:      Math.max(1, Math.ceil(rafi     / (PICKER_UPH   * 8))),
-        packer:      Math.ceil(forecast.intraday / (PACKER_UPH * 8)),
-        sorter:      1,
-        transporter: 1,
-      }
-    }
-    const combined = ROLES.reduce((acc, r) => {
-      acc[r] = (ddStaff[r] ?? 0) + (idStaff?.[r] ?? 0)
-      return acc
-    }, {} as Record<string, number>)
-    const total = Object.values(combined).reduce((a, b) => a + b, 0)
-    return { key, dow, forecast, ddStaff, idStaff, hasIntraday, combined, total }
+
+    const halfDD = Math.round(forecast.due_date / 2)
+    const s1 = staffForDDShift(halfDD, key)
+    const s2 = staffForDDShift(halfDD, key)  // same as s1 (50/50 split)
+    const si = hasIntraday ? staffForIntraday(forecast.intraday, month) : null
+
+    const s1Total = total(s1)
+    const s2Total = total(s2)
+    const siTotal = si ? total(si) : 0
+
+    return { key, dow, forecast, s1, s2, si, hasIntraday, s1Total, s2Total, siTotal, grandTotal: s1Total + s2Total + siTotal }
   })
+}
+
+// ── Sub-components ─────────────────────────────────────────────────────────────
+function ShiftCard({ label, time, color, bg, staff, avg }: {
+  label: string; time: string; color: string; bg: string
+  staff: StaffMap; avg: number
+}) {
+  return (
+    <div style={{ background: bg, borderRadius: 12, padding: '12px 14px', flex: 1 }}>
+      <div style={{ fontSize: 10, color, textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 600, marginBottom: 2 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 10 }}>{time}</div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {ROLES.map(r => (
+          <div key={r} style={{ textAlign: 'center', minWidth: 36 }}>
+            <div style={{ fontSize: 16, fontWeight: 600, color, fontFamily: 'monospace' }}>{staff[r] ?? 0}</div>
+            <div style={{ fontSize: 9, color: '#9ca3af' }}>{ROLE_LABELS[r]}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 10, fontSize: 11, color, fontWeight: 600 }}>
+        Σύνολο: {total(staff)} · μ.ο. {avg}/ημέρα
+      </div>
+    </div>
+  )
 }
 
 // ── Page ───────────────────────────────────────────────────────────────────────
@@ -182,9 +213,10 @@ export function StaffPlanPage() {
   const [notes, setNotes] = useState<CalendarNote[]>([])
   const [activeMonth, setActiveMonth] = useState(() => {
     const today = new Date()
-    const nm = today.getMonth() + 2  // next month (1-based)
+    const nm = today.getMonth() + 2
     return nm > 12 ? 1 : nm
   })
+  const [expandedRow, setExpandedRow] = useState<string | null>(null)
 
   useEffect(() => {
     try {
@@ -196,20 +228,29 @@ export function StaffPlanPage() {
   const year = 2026
   const rows = buildMonthRows(year, activeMonth, notes)
   const openRows = rows.filter(r => r.forecast.total > 0)
-  const avgTotal = openRows.length
-    ? Math.round(openRows.reduce((s, r) => s + r.total, 0) / openRows.length)
-    : 0
-  const avgByRole = ROLES.reduce((acc, r) => {
+
+  // Averages per shift for summary
+  const avgS1 = ROLES.reduce((acc, r) => {
     acc[r] = openRows.length
-      ? Math.round(openRows.reduce((s, row) => s + (row.combined[r] ?? 0), 0) / openRows.length)
+      ? Math.round(openRows.reduce((s, row) => s + (row.s1[r] ?? 0), 0) / openRows.length)
       : 0
     return acc
-  }, {} as Record<string, number>)
+  }, {} as StaffMap)
+  const avgS2 = { ...avgS1 }  // same as s1 (50/50)
+  const intradayRows = openRows.filter(r => r.hasIntraday)
+  const avgSi = ROLES.reduce((acc, r) => {
+    acc[r] = intradayRows.length
+      ? Math.round(intradayRows.reduce((s, row) => s + (row.si?.[r] ?? 0), 0) / intradayRows.length)
+      : 0
+    return acc
+  }, {} as StaffMap)
 
-  const maxTotal = Math.max(...rows.map(r => r.total), 1)
+  const avgS1Total = openRows.length ? Math.round(openRows.reduce((s, r) => s + r.s1Total, 0) / openRows.length) : 0
+  const avgSiTotal = intradayRows.length ? Math.round(intradayRows.reduce((s, r) => s + r.siTotal, 0) / intradayRows.length) : 0
+  const maxGrand = Math.max(...rows.map(r => r.grandTotal), 1)
 
   return (
-    <div style={{ padding: '20px 24px', maxWidth: 1100, margin: '0 auto' }}>
+    <div style={{ padding: '20px 24px', maxWidth: 1200, margin: '0 auto' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
         <button
@@ -217,17 +258,16 @@ export function StaffPlanPage() {
           style={{
             background: 'none', border: '0.5px solid #e5e5e5', borderRadius: 8,
             padding: '6px 12px', fontSize: 13, color: '#6b7280', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: 6,
           }}
         >
           ← Forecast
         </button>
         <div>
           <h1 style={{ margin: 0, fontSize: 20, fontWeight: 600, color: '#1a1a1a' }}>
-            Σχεδιασμός Προσωπικού
+            Σχεδιασμός Προσωπικού ανά Βάρδια
           </h1>
           <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
-            Απαιτούμενο προσωπικό ανά ημέρα — βάσει forecast
+            DD Βάρδια 1 (07–15) · DD Βάρδια 2 (13–21) · Intraday (18–02) — split 50/50
           </div>
         </div>
       </div>
@@ -237,13 +277,12 @@ export function StaffPlanPage() {
         {[6, 7, 8, 9, 10, 11, 12].map(m => (
           <button
             key={m}
-            onClick={() => setActiveMonth(m)}
+            onClick={() => { setActiveMonth(m); setExpandedRow(null) }}
             style={{
               padding: '6px 16px', borderRadius: 20, fontSize: 13, fontWeight: 500, cursor: 'pointer',
               border: 'none',
               background: activeMonth === m ? '#1a1a1a' : '#f5f5f3',
               color: activeMonth === m ? 'white' : '#6b7280',
-              transition: 'all 0.15s',
             }}
           >
             {MONTHS_GR[m]}
@@ -251,71 +290,89 @@ export function StaffPlanPage() {
         ))}
       </div>
 
-      {/* Summary cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 8, marginBottom: 16 }}>
-        {ROLES.map(r => (
-          <div key={r} style={{
-            background: 'white', border: '0.5px solid #e5e5e5', borderRadius: 10,
-            padding: '10px 12px', textAlign: 'center',
-          }}>
-            <div style={{ fontSize: 10, color: ROLE_COLORS[r], textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 4 }}>
-              {ROLE_LABELS[r]}
-            </div>
-            <div style={{ fontSize: 20, fontWeight: 600, color: ROLE_COLORS[r], fontFamily: 'monospace' }}>
-              {avgByRole[r]}
-            </div>
-            <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 2 }}>μ.ο./ημέρα</div>
-          </div>
-        ))}
+      {/* Shift summary cards */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+        <ShiftCard
+          label="DD Βάρδια 1"
+          time="07:00 – 15:00"
+          color="#378ADD"
+          bg="#f0f6fe"
+          staff={avgS1}
+          avg={avgS1Total}
+        />
+        <ShiftCard
+          label="DD Βάρδια 2"
+          time="13:00 – 21:00"
+          color="#1D9E75"
+          bg="#f0faf5"
+          staff={avgS2}
+          avg={avgS1Total}
+        />
+        {intradayRows.length > 0 && (
+          <ShiftCard
+            label="Intraday"
+            time="18:00 – 02:00"
+            color="#7F77DD"
+            bg="#f4f3fe"
+            staff={avgSi}
+            avg={avgSiTotal}
+          />
+        )}
         <div style={{
-          background: '#1a1a1a', borderRadius: 10, padding: '10px 12px', textAlign: 'center',
+          background: '#1a1a1a', borderRadius: 12, padding: '12px 14px',
+          display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
+          minWidth: 100,
         }}>
-          <div style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 4 }}>
-            Σύνολο
+          <div style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>
+            Μ.Ο. Σύνολο
           </div>
-          <div style={{ fontSize: 20, fontWeight: 600, color: 'white', fontFamily: 'monospace' }}>
-            {avgTotal}
+          <div style={{ fontSize: 28, fontWeight: 700, color: 'white', fontFamily: 'monospace' }}>
+            {openRows.length ? Math.round(openRows.reduce((s, r) => s + r.grandTotal, 0) / openRows.length) : 0}
           </div>
-          <div style={{ fontSize: 9, color: '#6b7280', marginTop: 2 }}>μ.ο./ημέρα</div>
+          <div style={{ fontSize: 10, color: '#6b7280', marginTop: 4 }}>άτομα/ημέρα</div>
         </div>
       </div>
 
       {/* Table */}
       <div style={{ background: 'white', border: '0.5px solid #e5e5e5', borderRadius: 12, overflow: 'hidden' }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-            <thead>
-              <tr style={{ background: '#f9f9f7', borderBottom: '0.5px solid #e5e5e5' }}>
-                <th style={{ textAlign: 'left', padding: '10px 14px', color: '#9ca3af', fontWeight: 500 }}>Ημ/νία</th>
-                <th style={{ padding: '10px 8px', color: '#9ca3af', fontWeight: 500, textAlign: 'center' }}>Ημέρα</th>
-                <th style={{ padding: '10px 8px', color: '#378ADD', fontWeight: 500, textAlign: 'center' }}>DD παρ.</th>
-                <th style={{ padding: '10px 8px', color: '#7F77DD', fontWeight: 500, textAlign: 'center' }}>Intraday</th>
-                {ROLES.map(r => (
-                  <th key={r} style={{ padding: '10px 8px', color: ROLE_COLORS[r], fontWeight: 500, textAlign: 'center' }}>
-                    {ROLE_LABELS[r]}
-                  </th>
-                ))}
-                <th style={{ padding: '10px 14px', color: '#1a1a1a', fontWeight: 600, textAlign: 'center' }}>Σύνολο</th>
-                <th style={{ padding: '10px 14px', color: '#9ca3af', fontWeight: 400, textAlign: 'left', width: 160 }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, idx) => {
-                const isSun  = row.dow === 0
-                const isSat  = row.dow === 6
-                const isClosed = row.forecast.total === 0
-                const isBlackFriday = row.key === '2026-11-27' || row.key === '2026-11-28'
-                const isHighload = row.forecast.total > 15000
-                const rowBg = isClosed
-                  ? '#fef9f9'
-                  : isBlackFriday ? '#fffbeb'
-                  : isHighload ? '#fefce8'
-                  : idx % 2 === 0 ? 'white' : '#fcfcfb'
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr style={{ background: '#f9f9f7', borderBottom: '0.5px solid #e5e5e5' }}>
+              <th style={{ textAlign: 'left', padding: '10px 14px', color: '#9ca3af', fontWeight: 500 }}>Ημ/νία</th>
+              <th style={{ padding: '10px 8px', color: '#9ca3af', fontWeight: 500, textAlign: 'center' }}>Ημέρα</th>
+              <th style={{ padding: '10px 8px', color: '#378ADD', fontWeight: 500, textAlign: 'center' }}>DD παρ.</th>
+              <th style={{ padding: '10px 8px', color: '#7F77DD', fontWeight: 500, textAlign: 'center' }}>Intra παρ.</th>
+              <th style={{ padding: '10px 10px', color: '#378ADD', fontWeight: 600, textAlign: 'center', background: '#f0f6fe' }}>
+                Β1 07–15
+              </th>
+              <th style={{ padding: '10px 10px', color: '#1D9E75', fontWeight: 600, textAlign: 'center', background: '#f0faf5' }}>
+                Β2 13–21
+              </th>
+              <th style={{ padding: '10px 10px', color: '#7F77DD', fontWeight: 600, textAlign: 'center', background: '#f4f3fe' }}>
+                Intraday
+              </th>
+              <th style={{ padding: '10px 14px', color: '#1a1a1a', fontWeight: 700, textAlign: 'center' }}>Σύνολο</th>
+              <th style={{ padding: '10px 14px', width: 140 }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, idx) => {
+              const isSun  = row.dow === 0
+              const isSat  = row.dow === 6
+              const isClosed = row.forecast.total === 0
+              const isBF   = row.key === '2026-11-27' || row.key === '2026-11-28'
+              const isHigh = row.forecast.total > 15000
+              const isExp  = expandedRow === row.key
+              const rowBg  = isClosed ? '#fef9f9' : isBF ? '#fffbeb' : isHigh ? '#fefce8' : idx % 2 === 0 ? 'white' : '#fcfcfb'
+              const barPct = isClosed ? 0 : Math.round((row.grandTotal / maxGrand) * 100)
 
-                const barWidth = isClosed ? 0 : Math.round((row.total / maxTotal) * 100)
-
-                return (
-                  <tr key={row.key} style={{ background: rowBg, borderBottom: '0.5px solid #f5f5f5' }}>
+              return (
+                <>
+                  <tr
+                    key={row.key}
+                    style={{ background: rowBg, borderBottom: isExp ? 'none' : '0.5px solid #f5f5f5', cursor: isClosed ? 'default' : 'pointer' }}
+                    onClick={() => !isClosed && setExpandedRow(prev => prev === row.key ? null : row.key)}
+                  >
                     <td style={{ padding: '8px 14px', fontFamily: 'monospace', color: '#1a1a1a', fontWeight: 500 }}>
                       {row.key.slice(5)}
                     </td>
@@ -328,56 +385,116 @@ export function StaffPlanPage() {
                     <td style={{ padding: '8px 8px', textAlign: 'center', color: '#7F77DD', fontFamily: 'monospace' }}>
                       {row.hasIntraday ? fmt(row.forecast.intraday) : '—'}
                     </td>
-                    {ROLES.map(r => (
-                      <td key={r} style={{ padding: '8px 8px', textAlign: 'center', fontFamily: 'monospace', color: isClosed ? '#d1d5db' : ROLE_COLORS[r], fontWeight: 500 }}>
-                        {isClosed ? '—' : row.combined[r]}
-                      </td>
-                    ))}
-                    <td style={{ padding: '8px 14px', textAlign: 'center', fontFamily: 'monospace', fontWeight: 700, color: isClosed ? '#d1d5db' : isBlackFriday ? '#b45309' : '#1a1a1a', fontSize: isClosed ? 11 : 14 }}>
-                      {isClosed ? 'ΚΛΕΙΣΤΟ' : row.total}
+                    <td style={{ padding: '8px 10px', textAlign: 'center', background: isClosed ? rowBg : '#f8fbff', fontFamily: 'monospace', fontWeight: 600, color: '#378ADD', fontSize: 14 }}>
+                      {isClosed ? '—' : row.s1Total}
+                    </td>
+                    <td style={{ padding: '8px 10px', textAlign: 'center', background: isClosed ? rowBg : '#f7fdf9', fontFamily: 'monospace', fontWeight: 600, color: '#1D9E75', fontSize: 14 }}>
+                      {isClosed ? '—' : row.s2Total}
+                    </td>
+                    <td style={{ padding: '8px 10px', textAlign: 'center', background: isClosed ? rowBg : '#faf9ff', fontFamily: 'monospace', fontWeight: 600, color: '#7F77DD', fontSize: 14 }}>
+                      {isClosed ? '—' : row.hasIntraday ? row.siTotal : '—'}
+                    </td>
+                    <td style={{ padding: '8px 14px', textAlign: 'center', fontFamily: 'monospace', fontWeight: 700, fontSize: 15, color: isClosed ? '#d1d5db' : isBF ? '#b45309' : '#1a1a1a' }}>
+                      {isClosed ? 'ΚΛΕΙΣΤΟ' : row.grandTotal}
                     </td>
                     <td style={{ padding: '8px 14px' }}>
                       {!isClosed && (
-                        <div style={{ position: 'relative', height: 6, background: '#f5f5f3', borderRadius: 3, overflow: 'hidden' }}>
-                          <div style={{
-                            height: '100%', borderRadius: 3,
-                            width: `${barWidth}%`,
-                            background: isBlackFriday ? '#f59e0b' : isHighload ? '#f97316' : '#378ADD',
-                            transition: 'width 0.3s',
-                          }} />
-                        </div>
+                        <>
+                          <div style={{ height: 6, background: '#f5f5f3', borderRadius: 3, overflow: 'hidden', marginBottom: 2 }}>
+                            <div style={{ height: '100%', borderRadius: 3, width: `${barPct}%`, background: isBF ? '#f59e0b' : isHigh ? '#f97316' : '#378ADD' }} />
+                          </div>
+                          <div style={{ fontSize: 9, color: '#d1d5db', textAlign: 'right' }}>{isExp ? '▲' : '▼ ανάλυση'}</div>
+                        </>
                       )}
-                      {isBlackFriday && (
-                        <div style={{ fontSize: 9, color: '#b45309', marginTop: 2 }}>🔥 Black Friday</div>
-                      )}
+                      {isBF && <div style={{ fontSize: 9, color: '#b45309' }}>🔥 Black Friday</div>}
                     </td>
                   </tr>
-                )
-              })}
-            </tbody>
-            <tfoot>
-              <tr style={{ background: '#f9f9f7', borderTop: '1px solid #e5e5e5' }}>
-                <td colSpan={4} style={{ padding: '8px 14px', fontSize: 11, color: '#6b7280', fontWeight: 500 }}>
-                  Μέσος όρος — {openRows.length} ανοιχτές ημέρες
-                </td>
-                {ROLES.map(r => (
-                  <td key={r} style={{ padding: '8px 8px', textAlign: 'center', fontFamily: 'monospace', color: ROLE_COLORS[r], fontWeight: 600 }}>
-                    {avgByRole[r]}
-                  </td>
-                ))}
-                <td style={{ padding: '8px 14px', textAlign: 'center', fontFamily: 'monospace', fontWeight: 700, color: '#1a1a1a' }}>
-                  {avgTotal}
-                </td>
-                <td />
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+
+                  {/* Expanded per-role breakdown */}
+                  {isExp && (
+                    <tr key={`${row.key}-exp`} style={{ background: rowBg, borderBottom: '0.5px solid #f5f5f5' }}>
+                      <td colSpan={9} style={{ padding: '0 14px 12px' }}>
+                        <div style={{ display: 'flex', gap: 10, paddingTop: 8 }}>
+
+                          {/* DD Shift 1 */}
+                          <div style={{ flex: 1, background: '#f0f6fe', borderRadius: 10, padding: '10px 12px' }}>
+                            <div style={{ fontSize: 10, color: '#378ADD', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 8 }}>
+                              DD Βάρδια 1 · 07:00–15:00 · {fmt(Math.round(row.forecast.due_date / 2))} παρ.
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6 }}>
+                              {ROLES.map(r => (
+                                <div key={r} style={{ textAlign: 'center', background: 'white', borderRadius: 8, padding: '6px 4px' }}>
+                                  <div style={{ fontSize: 16, fontWeight: 600, color: ROLE_COLORS[r], fontFamily: 'monospace' }}>{row.s1[r] ?? 0}</div>
+                                  <div style={{ fontSize: 9, color: '#9ca3af' }}>{ROLE_LABELS[r]}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* DD Shift 2 */}
+                          <div style={{ flex: 1, background: '#f0faf5', borderRadius: 10, padding: '10px 12px' }}>
+                            <div style={{ fontSize: 10, color: '#1D9E75', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 8 }}>
+                              DD Βάρδια 2 · 13:00–21:00 · {fmt(Math.round(row.forecast.due_date / 2))} παρ.
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6 }}>
+                              {ROLES.map(r => (
+                                <div key={r} style={{ textAlign: 'center', background: 'white', borderRadius: 8, padding: '6px 4px' }}>
+                                  <div style={{ fontSize: 16, fontWeight: 600, color: ROLE_COLORS[r], fontFamily: 'monospace' }}>{row.s2[r] ?? 0}</div>
+                                  <div style={{ fontSize: 9, color: '#9ca3af' }}>{ROLE_LABELS[r]}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Intraday */}
+                          {row.hasIntraday && row.si && (
+                            <div style={{ flex: 1, background: '#f4f3fe', borderRadius: 10, padding: '10px 12px' }}>
+                              <div style={{ fontSize: 10, color: '#7F77DD', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 8 }}>
+                                Intraday · 18:00–02:00 · {fmt(row.forecast.intraday)} παρ.
+                              </div>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6 }}>
+                                {ROLES.map(r => (
+                                  <div key={r} style={{ textAlign: 'center', background: 'white', borderRadius: 8, padding: '6px 4px' }}>
+                                    <div style={{ fontSize: 16, fontWeight: 600, color: ROLE_COLORS[r], fontFamily: 'monospace' }}>{row.si![r] ?? 0}</div>
+                                    <div style={{ fontSize: 9, color: '#9ca3af' }}>{ROLE_LABELS[r]}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
+              )
+            })}
+          </tbody>
+          <tfoot>
+            <tr style={{ background: '#f9f9f7', borderTop: '1px solid #e5e5e5' }}>
+              <td colSpan={4} style={{ padding: '8px 14px', fontSize: 11, color: '#6b7280', fontWeight: 500 }}>
+                Μέσος όρος — {openRows.length} ανοιχτές ημέρες
+              </td>
+              <td style={{ padding: '8px 10px', textAlign: 'center', background: '#f0f6fe', fontFamily: 'monospace', fontWeight: 700, color: '#378ADD' }}>
+                {avgS1Total}
+              </td>
+              <td style={{ padding: '8px 10px', textAlign: 'center', background: '#f0faf5', fontFamily: 'monospace', fontWeight: 700, color: '#1D9E75' }}>
+                {avgS1Total}
+              </td>
+              <td style={{ padding: '8px 10px', textAlign: 'center', background: '#f4f3fe', fontFamily: 'monospace', fontWeight: 700, color: '#7F77DD' }}>
+                {avgSiTotal || '—'}
+              </td>
+              <td style={{ padding: '8px 14px', textAlign: 'center', fontFamily: 'monospace', fontWeight: 700, color: '#1a1a1a' }}>
+                {openRows.length ? Math.round(openRows.reduce((s, r) => s + r.grandTotal, 0) / openRows.length) : 0}
+              </td>
+              <td />
+            </tr>
+          </tfoot>
+        </table>
       </div>
 
-      <div style={{ marginTop: 12, fontSize: 11, color: '#9ca3af', textAlign: 'center' }}>
-        Τα νούμερα προσωπικού συμπεριλαμβάνουν και τις δύο βάρδιες (Due Date + Intraday) εφόσον υπάρχουν.
-        Sorter/Transporter είναι σταθερά ανά δομή βάρδιας.
+      <div style={{ marginTop: 10, fontSize: 11, color: '#9ca3af', textAlign: 'center' }}>
+        Κλίκ σε γραμμή για ανάλυση ανά ρόλο · Sorter/Transporter είναι σταθερά ανά βάρδια · DD split 50/50
       </div>
     </div>
   )
