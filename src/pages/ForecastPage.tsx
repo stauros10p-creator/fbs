@@ -46,7 +46,16 @@ const PICKER_UPH    = 77   // avg from 3-month pickers data
 const PACKER_UPH    = 80   // fixed (per operations)
 const SORTER_UPH    = 150  // machine-assisted (belt feed + palletizing)
 const VALIDATOR_UPH = 50   // packer in training (<55 UPH)
-const EFF_HOURS     = 13   // effective daily hours for Due Date (06:00–19:00)
+// Effective working hours per day-of-week (for staffing calculations)
+const EFF_HOURS_BY_DOW: Record<number, number> = {
+  0: 8,   // Κυριακή: 11:00–19:00
+  1: 13,  // Δευτέρα: 06:00–19:00
+  2: 13,  // Τρίτη
+  3: 13,  // Τετάρτη
+  4: 13,  // Πέμπτη
+  5: 15,  // Παρασκευή: 06:00–21:00
+  6: 8,   // Σάββατο: 09:00–17:00
+}
 const ROLE_LABELS: Record<string, string> = {
   picker: 'Picker', packer: 'Packer', sorter: 'Sorter',
   operator: 'Operator', validator: 'Validator', transporter: 'Transporter',
@@ -172,7 +181,9 @@ function staffForOrders(orders: number, dateKey?: string): Record<string, number
   const asPct  = month ? (AS_SPLIT[month] ?? 0.85) : 0.85
   const asOrders = Math.round(orders * asPct)
   const rafi   = orders - asOrders
-  const packer = Math.ceil(orders / (PACKER_UPH * EFF_HOURS))
+  const dow    = dateKey ? new Date(dateKey + 'T12:00:00').getDay() : 1
+  const H      = EFF_HOURS_BY_DOW[dow] ?? 13
+  const packer = Math.ceil(orders / (PACKER_UPH * H))
 
   // Sorter & Transporter: fixed per shift structure (not volume-based)
   let sorter = 6, transporter = 2  // default Mon–Fri
@@ -185,8 +196,8 @@ function staffForOrders(orders: number, dateKey?: string): Record<string, number
   }
 
   return {
-    operator:    Math.max(2, Math.ceil(asOrders / (OPERATOR_UPH * EFF_HOURS))),
-    picker:      Math.max(1, Math.ceil(rafi     / (PICKER_UPH   * EFF_HOURS))),
+    operator:    Math.max(2, Math.ceil(asOrders / (OPERATOR_UPH * H))),
+    picker:      Math.max(1, Math.ceil(rafi     / (PICKER_UPH   * H))),
     packer,
     sorter,
     validator:   Math.max(1, Math.round(packer  * 0.25)),
@@ -197,6 +208,7 @@ function workHours(orders: number, month?: number) {
   const asPct    = month ? (AS_SPLIT[month] ?? 0.85) : 0.85
   const asOrders = Math.round(orders * asPct)
   const rafi     = orders - asOrders
+  // total human-hours = operator + picker + packer + sorter effort
   const h = asOrders / OPERATOR_UPH + rafi / PICKER_UPH
     + orders / PACKER_UPH + orders / SORTER_UPH
   return Math.round(h * 10) / 10
