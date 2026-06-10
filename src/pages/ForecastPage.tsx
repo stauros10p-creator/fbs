@@ -42,7 +42,7 @@ const DEMAND_SPLIT = [
 ]
 
 // Real UPH values (from productivity reports)
-const OPERATOR_UPH  = 161  // avg from 1-month operators data
+const OPERATOR_UPH  = 190  // target 200 UPH × 95% efficiency (7h36 productive/8h shift)
 const PICKER_UPH    = 77   // avg from 3-month pickers data
 const PACKER_UPH    = 80   // fixed (per operations)
 const SORTER_UPH    = 150  // machine-assisted (belt feed + palletizing)

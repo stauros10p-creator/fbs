@@ -15,7 +15,7 @@ const AS_SPLIT: Record<number, number> = {
   6: 0.70, 7: 0.80,
   8: 0.90, 9: 0.90, 10: 0.90, 11: 0.90, 12: 0.90,
 }
-const OPERATOR_UPH = 161
+const OPERATOR_UPH = 190  // target 200 UPH × 95% efficiency (7h36 productive/8h shift)
 const PICKER_UPH   = 77
 const PACKER_UPH   = 80
 
