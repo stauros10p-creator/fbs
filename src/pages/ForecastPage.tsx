@@ -167,7 +167,7 @@ function getForDay(key: string, notes: CalendarNote[]) {
     intraday:  Math.round(base.intraday * mult),
   }
 }
-function staffForOrders(orders: number, month?: number) {
+function staffForOrders(orders: number, month?: number): Record<string, number> {
   const asPct     = month ? (AS_SPLIT[month] ?? 0.85) : 0.85
   const asOrders  = Math.round(orders * asPct)
   const rafi      = orders - asOrders
