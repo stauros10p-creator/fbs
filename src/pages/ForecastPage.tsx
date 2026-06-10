@@ -313,15 +313,7 @@ function WeeklyStaffChart({ weekStart, notes }: { weekStart: Date; notes: Calend
           <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} width={28} />
           <Tooltip content={<CustomTooltip />} />
           {roles.map(r => (
-            <Bar key={r} dataKey={r} stackId="a" fill={ROLE_COLORS[r]}
-              label={roles.indexOf(r) === roles.length - 1 ? {
-                position: 'top', fontSize: 10, fontWeight: 500, fill: '#1a1a1a',
-                formatter: (_: any, __: any, props: any) => {
-                  const d = data[props.index]
-                  return d ? d.total : ''
-                }
-              } : false}
-            />
+            <Bar key={r} dataKey={r} stackId="a" fill={ROLE_COLORS[r]} />
           ))}
         </BarChart>
       </ResponsiveContainer>
