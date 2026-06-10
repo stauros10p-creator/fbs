@@ -367,9 +367,51 @@ function DemandDonut({ total }: { total: number }) {
   )
 }
 
+// ── Monthly Staff Plan helper ──────────────────────────────────────────────────
+const MONTH_NAMES_GEN: Record<number, string> = {
+  1: 'Ιανουαρίου', 2: 'Φεβρουαρίου', 3: 'Μαρτίου', 4: 'Απριλίου',
+  5: 'Μαΐου', 6: 'Ιουνίου', 7: 'Ιουλίου', 8: 'Αυγούστου',
+  9: 'Σεπτεμβρίου', 10: 'Οκτωβρίου', 11: 'Νοεμβρίου', 12: 'Δεκεμβρίου',
+}
+const DOW_GR_SHORT = ['Κυρ', 'Δευ', 'Τρι', 'Τετ', 'Πεμ', 'Παρ', 'Σαβ']
+
+function buildMonthPlan(year: number, month: number, notes: CalendarNote[]) {
+  const daysInMonth = new Date(year, month, 0).getDate()
+  return Array.from({ length: daysInMonth }, (_, i) => {
+    const key = `${year}-${String(month).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`
+    const forecast = getForDay(key, notes)
+    const ddStaff = staffForOrders(forecast.due_date, key)
+    const dow = new Date(key + 'T12:00:00').getDay()
+    const hasIntraday = forecast.intraday > 0 && dow !== 5 && dow !== 6
+    let idStaff: Record<string, number> | null = null
+    if (hasIntraday) {
+      const idOrders = forecast.intraday
+      const asPct = AS_SPLIT[month] ?? 0.85
+      const asOrders = Math.round(idOrders * asPct)
+      const rafi = idOrders - asOrders
+      const packer = Math.ceil(idOrders / (PACKER_UPH * 8))
+      idStaff = {
+        operator:    Math.max(1, Math.ceil(asOrders / (OPERATOR_UPH * 8))),
+        picker:      Math.max(1, Math.ceil(rafi     / (PICKER_UPH   * 8))),
+        packer,
+        sorter:      1,
+        transporter: 1,
+      }
+    }
+    return { key, dow, forecast, ddStaff, idStaff, hasIntraday }
+  })
+}
+
 // 3b. Weekly stacked bar (required staff per day per role)
 function WeeklyStaffChart({ weekStart, notes }: { weekStart: Date; notes: CalendarNote[] }) {
   const [selected, setSelected] = useState<string | null>(null)
+  const [showMonthPlan, setShowMonthPlan] = useState(false)
+
+  // Next month relative to today
+  const today = new Date()
+  const nmYear  = today.getMonth() === 11 ? today.getFullYear() + 1 : today.getFullYear()
+  const nmMonth = today.getMonth() === 11 ? 1 : today.getMonth() + 2  // getMonth() is 0-based, +2 = next month 1-based
+  const monthPlanData = useMemo(() => buildMonthPlan(nmYear, nmMonth, notes), [nmYear, nmMonth, notes])
 
   const data = Array.from({ length: 7 }, (_, i) => {
     const d = addDays(weekStart, i)
@@ -437,11 +479,21 @@ function WeeklyStaffChart({ weekStart, notes }: { weekStart: Date; notes: Calend
     }
   }
 
+  const planRoles = ['picker', 'packer', 'sorter', 'operator', 'transporter']
+
   return (
     <div style={{ background: 'white', border: '0.5px solid #e5e5e5', borderRadius: 12, padding: '16px 18px' }}>
-      <div style={{ fontSize: 11, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 14 }}>
-        Απαιτούμενο Προσωπικό ανά Ημέρα (εβδομάδα)
-        <span style={{ marginLeft: 8, textTransform: 'none', fontSize: 10, color: '#d1d5db' }}>— κλίκ σε ημέρα για ανάλυση</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div
+          onClick={() => setShowMonthPlan(p => !p)}
+          style={{ fontSize: 11, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+        >
+          <span>Απαιτούμενο Προσωπικό ανά Ημέρα (εβδομάδα)</span>
+          <span style={{ background: showMonthPlan ? '#378ADD' : '#f0f4ff', color: showMonthPlan ? 'white' : '#378ADD', borderRadius: 6, padding: '2px 8px', fontSize: 10, textTransform: 'none', letterSpacing: 0, fontWeight: 600, whiteSpace: 'nowrap' }}>
+            {showMonthPlan ? '▲ Κλείσιμο' : `📅 ${MONTH_NAMES_GEN[nmMonth]} ${nmYear}`}
+          </span>
+        </div>
+        <span style={{ fontSize: 10, color: '#d1d5db' }}>κλίκ σε ημέρα για ανάλυση</span>
       </div>
       <ResponsiveContainer width="100%" height={180}>
         <BarChart data={data} barSize={28}>
@@ -470,6 +522,102 @@ function WeeklyStaffChart({ weekStart, notes }: { weekStart: Date; notes: Calend
           </div>
         ))}
       </div>
+
+      {/* Monthly plan panel */}
+      {showMonthPlan && (
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: '0.5px solid #f0f0f0' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a', marginBottom: 12 }}>
+            Πρόβλεψη Προσωπικού — {MONTH_NAMES_GEN[nmMonth]} {nmYear}
+          </div>
+
+          {/* Sticky header */}
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+              <thead>
+                <tr style={{ background: '#f9f9f7' }}>
+                  <th style={{ textAlign: 'left', padding: '6px 8px', color: '#9ca3af', fontWeight: 500, borderBottom: '0.5px solid #e5e5e5' }}>Ημ/νία</th>
+                  <th style={{ padding: '6px 8px', color: '#9ca3af', fontWeight: 500, borderBottom: '0.5px solid #e5e5e5', textAlign: 'center' }}>Ημέρα</th>
+                  <th style={{ padding: '6px 8px', color: '#378ADD', fontWeight: 500, borderBottom: '0.5px solid #e5e5e5', textAlign: 'center' }}>DD Παρ.</th>
+                  <th style={{ padding: '6px 8px', color: '#7F77DD', fontWeight: 500, borderBottom: '0.5px solid #e5e5e5', textAlign: 'center' }}>Intra Παρ.</th>
+                  {planRoles.map(r => (
+                    <th key={r} style={{ padding: '6px 8px', color: ROLE_COLORS[r], fontWeight: 500, borderBottom: '0.5px solid #e5e5e5', textAlign: 'center' }}>
+                      {ROLE_LABELS[r]}
+                    </th>
+                  ))}
+                  <th style={{ padding: '6px 8px', color: '#1a1a1a', fontWeight: 600, borderBottom: '0.5px solid #e5e5e5', textAlign: 'center' }}>Σύνολο</th>
+                </tr>
+              </thead>
+              <tbody>
+                {monthPlanData.map((row, idx) => {
+                  const isSun = row.dow === 0
+                  const isSat = row.dow === 6
+                  const isFri = row.dow === 5
+                  const isClosed = row.forecast.total === 0
+                  const ddTotal = Object.values(row.ddStaff).reduce((a, b) => a + b, 0)
+                  const idTotal = row.idStaff ? Object.values(row.idStaff).reduce((a, b) => a + b, 0) : 0
+                  const combinedStaff = planRoles.reduce((acc, r) => {
+                    acc[r] = (row.ddStaff[r] ?? 0) + (row.idStaff?.[r] ?? 0)
+                    return acc
+                  }, {} as Record<string, number>)
+                  const total = Object.values(combinedStaff).reduce((a, b) => a + b, 0)
+                  const isHighload = row.forecast.total > 15000
+                  const rowBg = isClosed ? '#fef2f2' : isHighload ? '#fffbeb' : idx % 2 === 0 ? 'white' : '#fcfcfb'
+
+                  return (
+                    <tr key={row.key} style={{ background: rowBg, borderBottom: '0.5px solid #f5f5f5' }}>
+                      <td style={{ padding: '5px 8px', fontFamily: 'monospace', color: '#1a1a1a', fontSize: 11, fontWeight: 500 }}>
+                        {row.key.slice(5)}
+                      </td>
+                      <td style={{ padding: '5px 8px', textAlign: 'center', color: isSun || isSat ? '#7F77DD' : '#6b7280', fontSize: 10 }}>
+                        {DOW_GR_SHORT[row.dow]}
+                      </td>
+                      <td style={{ padding: '5px 8px', textAlign: 'center', color: '#378ADD', fontFamily: 'monospace' }}>
+                        {isClosed ? '—' : fmt(row.forecast.due_date)}
+                      </td>
+                      <td style={{ padding: '5px 8px', textAlign: 'center', color: '#7F77DD', fontFamily: 'monospace' }}>
+                        {row.hasIntraday ? fmt(row.forecast.intraday) : '—'}
+                      </td>
+                      {planRoles.map(r => (
+                        <td key={r} style={{ padding: '5px 8px', textAlign: 'center', fontFamily: 'monospace', color: isClosed ? '#d1d5db' : ROLE_COLORS[r], fontWeight: 500 }}>
+                          {isClosed ? '—' : combinedStaff[r]}
+                        </td>
+                      ))}
+                      <td style={{ padding: '5px 8px', textAlign: 'center', fontFamily: 'monospace', fontWeight: 700, color: isClosed ? '#d1d5db' : isHighload ? '#b45309' : '#1a1a1a' }}>
+                        {isClosed ? 'ΚΛΕΙΣΤΟ' : total}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr style={{ background: '#f9f9f7', borderTop: '1px solid #e5e5e5' }}>
+                  <td colSpan={4} style={{ padding: '6px 8px', fontSize: 11, color: '#6b7280', fontWeight: 500 }}>Μ.Ο. ανά ανοιχτή ημέρα</td>
+                  {planRoles.map(r => {
+                    const openDays = monthPlanData.filter(d => d.forecast.total > 0)
+                    const avg = openDays.length ? Math.round(openDays.reduce((s, d) => {
+                      return s + (d.ddStaff[r] ?? 0) + (d.idStaff?.[r] ?? 0)
+                    }, 0) / openDays.length) : 0
+                    return (
+                      <td key={r} style={{ padding: '6px 8px', textAlign: 'center', fontFamily: 'monospace', color: ROLE_COLORS[r], fontWeight: 600 }}>
+                        {avg}
+                      </td>
+                    )
+                  })}
+                  <td style={{ padding: '6px 8px', textAlign: 'center', fontFamily: 'monospace', fontWeight: 700, color: '#1a1a1a' }}>
+                    {(() => {
+                      const open = monthPlanData.filter(d => d.forecast.total > 0)
+                      const avg = open.length ? Math.round(open.reduce((s, d) => {
+                        return s + planRoles.reduce((rs, r) => rs + (d.ddStaff[r] ?? 0) + (d.idStaff?.[r] ?? 0), 0)
+                      }, 0) / open.length) : 0
+                      return avg
+                    })()}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Detail panel */}
       {selData && ddStaff && (
