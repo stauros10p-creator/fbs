@@ -980,3 +980,4 @@ export function ForecastPage() {
     </div>
   )
 }
+
