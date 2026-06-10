@@ -167,18 +167,30 @@ function getForDay(key: string, notes: CalendarNote[]) {
     intraday:  Math.round(base.intraday * mult),
   }
 }
-function staffForOrders(orders: number, month?: number): Record<string, number> {
-  const asPct     = month ? (AS_SPLIT[month] ?? 0.85) : 0.85
-  const asOrders  = Math.round(orders * asPct)
-  const rafi      = orders - asOrders
-  const packer    = Math.ceil(orders  / (PACKER_UPH   * EFF_HOURS))
+function staffForOrders(orders: number, dateKey?: string): Record<string, number> {
+  const month  = dateKey ? parseInt(dateKey.slice(5, 7)) : undefined
+  const asPct  = month ? (AS_SPLIT[month] ?? 0.85) : 0.85
+  const asOrders = Math.round(orders * asPct)
+  const rafi   = orders - asOrders
+  const packer = Math.ceil(orders / (PACKER_UPH * EFF_HOURS))
+
+  // Sorter & Transporter: fixed per shift structure (not volume-based)
+  let sorter = 6, transporter = 2  // default Mon–Fri
+  if (dateKey) {
+    const dow = new Date(dateKey + 'T12:00:00').getDay() // 0=Sun,6=Sat
+    if (dow === 6) { sorter = 2; transporter = 1 }                   // Σάββατο
+    else if (dow === 0) { sorter = 3; transporter = 2 }              // Κυριακή (2+1 intraday)
+    else if (dow === 5) { sorter = 6; transporter = 2 }              // Παρασκευή (χωρίς intraday)
+    else { sorter = 7; transporter = 3 }                             // Δευ–Πεμ (6 + 1 intraday)
+  }
+
   return {
     operator:    Math.max(2, Math.ceil(asOrders / (OPERATOR_UPH * EFF_HOURS))),
     picker:      Math.max(1, Math.ceil(rafi     / (PICKER_UPH   * EFF_HOURS))),
     packer,
-    sorter:      Math.max(2, Math.ceil(orders   / (SORTER_UPH   * EFF_HOURS))),
+    sorter,
     validator:   Math.max(1, Math.round(packer  * 0.25)),
-    transporter: Math.max(2, Math.ceil(orders   / 4500)),
+    transporter,
   }
 }
 function workHours(orders: number, month?: number) {
@@ -220,7 +232,7 @@ function KPIBar({ day, prev, notes }: { day: string; prev: string; notes: Calend
   const today = getForDay(day, notes)
   const yesterday = getForDay(prev, notes)
   const m = parseInt(day.slice(5, 7))
-  const staff = staffForOrders(today.total, m)
+  const staff = staffForOrders(today.total, day)
   const hours = workHours(today.total, m)
   const sla = slaScore(today.total, staff)
 
@@ -280,8 +292,8 @@ function KPIBar({ day, prev, notes }: { day: string; prev: string; notes: Calend
 }
 
 // 2. Staff cards
-function StaffCards({ orders, month }: { orders: number; month?: number }) {
-  const staff = staffForOrders(orders, month)
+function StaffCards({ orders, dateKey }: { orders: number; dateKey?: string }) {
+  const staff = staffForOrders(orders, dateKey)
   return (
     <div>
       <div style={{ fontSize: 11, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>
@@ -351,7 +363,7 @@ function WeeklyStaffChart({ weekStart, notes }: { weekStart: Date; notes: Calend
     const d = addDays(weekStart, i)
     const key = toKey(d)
     const orders = getForDay(key, notes).total
-    const staff = staffForOrders(orders, parseInt(key.slice(5, 7)))
+    const staff = staffForOrders(orders, key)
     const note = notes.find(n => n.date === key)
     return {
       name: DOW_LABELS[i],
@@ -412,7 +424,7 @@ function WeeklyStaffChart({ weekStart, notes }: { weekStart: Date; notes: Calend
 // 4. SLA prediction bars
 function SLABars({ day, notes }: { day: string; notes: CalendarNote[] }) {
   const { due_date, intraday, total } = getForDay(day, notes)
-  const staff = staffForOrders(total, parseInt(day.slice(5, 7)))
+  const staff = staffForOrders(total, day)
 
   const scenarios = [
     { label: 'Due Date (έως 19:00)', orders: due_date, cutoff: '19:00', color: '#378ADD' },
@@ -630,7 +642,7 @@ function CalendarNotes({ notes, onChange }: { notes: CalendarNote[]; onChange: (
       results.push({
         icon: '🔥', level: 'warn',
         title: `Peak αναμένεται ${DOW_LABELS[(peaks[0].d.getDay() + 6) % 7]} ${peaks[0].d.getDate()}/${peaks[0].d.getMonth() + 1}`,
-        body: `${fmt(peaks[0].data.total)} παραγγελίες — χρειάζεται ${Object.values(staffForOrders(peaks[0].data.total, peaks[0].d.getMonth() + 1)).reduce((a, b) => a + b, 0)} άτομα.`,
+        body: `${fmt(peaks[0].data.total)} παραγγελίες — χρειάζεται ${Object.values(staffForOrders(peaks[0].data.total, toKey(peaks[0].d))).reduce((a, b) => a + b, 0)} άτομα.`,
       })
     }
 
@@ -667,7 +679,7 @@ function CalendarNotes({ notes, onChange }: { notes: CalendarNote[]; onChange: (
       results.push({
         icon: '⚠️', level: 'warn',
         title: 'Αυξημένος όγκος εργασίας εβδομάδας',
-        body: `${highWeek.length} ημέρες με >14.000 παρ. — απαιτείται ~${Math.round(highWeek.reduce((a, u) => a + Object.values(staffForOrders(u.data.total, u.d.getMonth() + 1)).reduce((x, y) => x + y, 0), 0) / highWeek.length)} άτομα/ημέρα.`,
+        body: `${highWeek.length} ημέρες με >14.000 παρ. — απαιτείται ~${Math.round(highWeek.reduce((a, u) => a + Object.values(staffForOrders(u.data.total, toKey(u.d))).reduce((x, y) => x + y, 0), 0) / highWeek.length)} άτομα/ημέρα.`,
       })
     }
 
@@ -1032,7 +1044,7 @@ export function ForecastPage() {
 
         {/* 2. Staff cards */}
         <div style={{ background: 'white', border: '0.5px solid #e5e5e5', borderRadius: 12, padding: '16px 18px' }}>
-          <StaffCards orders={dayData.total} month={parseInt(selectedDay.slice(5, 7))} />
+          <StaffCards orders={dayData.total} dateKey={selectedDay} />
         </div>
 
         {/* 3. Demand distribution + weekly chart */}
