@@ -447,19 +447,19 @@ function WeeklyStaffChart({ weekStart, notes }: { weekStart: Date; notes: Calend
         <span style={{ marginLeft: 8, textTransform: 'none', fontSize: 10, color: '#d1d5db' }}>— κλίκ σε ημέρα για ανάλυση</span>
       </div>
       <ResponsiveContainer width="100%" height={180}>
-        <BarChart data={data} barSize={28} onClick={(e: any) => {
-          if (e?.activePayload?.[0]) {
-            const date = e.activePayload[0].payload.date
-            setSelected(prev => prev === date ? null : date)
-          }
-        }} style={{ cursor: 'pointer' }}>
+        <BarChart data={data} barSize={28}>
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
           <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
           <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} width={28} />
           <Tooltip content={<CustomTooltip />} />
           {roles.map(r => (
             <Bar key={r} dataKey={r} stackId="a" fill={ROLE_COLORS[r]}
-              opacity={selected && data.find(d => d.date === selected)?.name !== undefined ? 1 : 1} />
+              cursor="pointer"
+              onClick={(payload: any) => {
+                const date = payload?.date
+                if (date) setSelected((prev: string | null) => prev === date ? null : date)
+              }}
+            />
           ))}
         </BarChart>
       </ResponsiveContainer>
