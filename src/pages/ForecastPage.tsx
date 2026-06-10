@@ -988,4 +988,3 @@ export function ForecastPage() {
     </div>
   )
 }
-
