@@ -21,10 +21,10 @@ const MONTHS_GR: Record<number, string> = {
   9: 'Σεπτέμβριος', 10: 'Οκτώβριος', 11: 'Νοέμβριος', 12: 'Δεκέμβριος',
 }
 const MONTHS_SHORT: Record<number, string> = {
-  7: 'Ιούλ', 8: 'Αύγ', 9: 'Σεπ', 10: 'Οκτ', 11: 'Νοε', 12: 'Δεκ',
+  6: 'Ιούν', 7: 'Ιούλ', 8: 'Αύγ', 9: 'Σεπ', 10: 'Οκτ', 11: 'Νοε', 12: 'Δεκ',
 }
 
-const CAPACITY_LIMIT = 9000 // max orders/day at full staffing
+const CAPACITY_LIMIT = 22000 // max orders/day at full staffing
 
 const DEMAND_SPLIT = [
   { role: 'Picking',  key: 'picker',   pct: 0.45, color: '#378ADD' },
@@ -69,44 +69,76 @@ const HOURLY_DIST = [
   { hour: '19:00', recv: 0.02, comp: 0.01 },
 ]
 
-// ── H2 2025 Forecast Data ──────────────────────────────────────────────────────
-// ⚠️  PLACEHOLDER — replace with actual forecast from operations team
-// [Mon, Tue, Wed, Thu, Fri, Sat, Sun] base volumes per month
-const MONTH_BASE: Record<number, number[]> = {
-  7:  [2100, 2350, 2200, 2450, 2900, 3400, 2150],
-  8:  [2400, 2650, 2500, 2750, 3200, 3700, 2450],
-  9:  [2850, 3100, 2950, 3250, 3700, 4200, 2950],
-  10: [3350, 3600, 3450, 3700, 4200, 4800, 3400],
-  11: [3850, 4100, 3950, 4250, 4900, 5600, 4150],
-  12: [5300, 5700, 5500, 5900, 6700, 7700, 4950],
+// ── Forecast 2026 (Jun–Dec) ────────────────────────────────────────────────────
+// Due Date orders per day-of-week per month (from Forecast.xlsx — DD only, excl. intraday)
+const DD_BASE: Record<number, { mon: number; twt: number; fri: number; sat: number; sun: number }> = {
+  6:  { mon: 11267, twt: 10332, fri:  8650, sat:  6055, sun:  7798 },
+  7:  { mon: 13135, twt: 12044, fri: 10084, sat:  7059, sun:  9091 },
+  8:  { mon: 11566, twt: 10606, fri:  8880, sat:  6216, sun:  8005 },
+  9:  { mon: 12989, twt: 11911, fri:  9972, sat:  6980, sun:  8990 },
+  10: { mon: 13317, twt: 12212, fri: 10224, sat:  7157, sun:  9217 },
+  11: { mon: 17112, twt: 15691, fri: 13137, sat:  9196, sun: 11843 },
+  12: { mon: 18243, twt: 16728, fri: 14006, sat:  9804, sun: 12626 },
 }
+
+// Intraday orders per day-of-week per month (Mon–Thu + Sun only; Fri/Sat = 0)
+const INTRADAY_BASE: Record<number, { mon: number; twt: number; sun: number }> = {
+  6:  { mon: 1600, twt: 1500, sun: 1746 },
+  7:  { mon: 1865, twt: 1749, sun: 2035 },
+  8:  { mon: 1642, twt: 1540, sun: 1792 },
+  9:  { mon: 1845, twt: 1729, sun: 2013 },
+  10: { mon: 1891, twt: 1773, sun: 2064 },
+  11: { mon: 2430, twt: 2278, sun: 2652 },
+  12: { mon: 2591, twt: 2429, sun: 2827 },
+}
+
+// Special days: override total orders (0 = closed)
 const SPECIAL_DAYS: Record<string, number> = {
-  '2025-11-28': 11200,
-  '2025-11-29': 9400,
-  '2025-12-06': 0,    // αργία
-  '2025-12-24': 1800,
-  '2025-12-25': 0,
-  '2025-12-26': 0,
-  '2025-12-31': 2200,
-  '2026-01-01': 0,
+  '2026-08-15': 1200,   // Δεκαπενταύγουστος
+  '2026-10-28': 0,      // Εθνική Εορτή
+  '2026-11-27': 38000,  // Black Friday
+  '2026-11-28': 28000,  // Black Friday Saturday
+  '2026-12-25': 0,      // Χριστούγεννα
+  '2026-12-26': 0,      // 2η μέρα Χριστουγέννων
+  '2026-12-31': 4500,   // Παραμονή Πρωτοχρονιάς
 }
 
 function buildForecast(): Record<string, { total: number; due_date: number; intraday: number }> {
   const out: Record<string, { total: number; due_date: number; intraday: number }> = {}
-  const end = new Date('2025-12-31')
-  for (let d = new Date('2025-07-01'); d <= end; d.setDate(d.getDate() + 1)) {
+  const end = new Date('2026-12-31')
+  for (let d = new Date('2026-06-01'); d <= end; d.setDate(d.getDate() + 1)) {
     const key = d.toISOString().slice(0, 10)
     const m = d.getMonth() + 1
-    const dow = d.getDay() === 0 ? 6 : d.getDay() - 1
-    let total: number
+    const dow = (d.getDay() + 6) % 7  // 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
+
+    const ddRow = DD_BASE[m]
+    const idRow = INTRADAY_BASE[m]
+
+    // Normal base values for this day-of-week
+    const normDD  = dow === 0 ? ddRow.mon : dow <= 3 ? ddRow.twt : dow === 4 ? ddRow.fri : dow === 5 ? ddRow.sat : ddRow.sun
+    const normID  = dow === 0 ? idRow.mon : dow <= 3 ? idRow.twt : dow === 4 ? 0 : dow === 5 ? 0 : idRow.sun
+
+    let due_date: number
+    let intraday: number
+
     if (SPECIAL_DAYS[key] !== undefined) {
-      total = SPECIAL_DAYS[key]
+      const special = SPECIAL_DAYS[key]
+      if (special === 0) {
+        due_date = 0; intraday = 0
+      } else {
+        // Scale proportionally from normal day ratio
+        const normTotal = normDD + normID
+        due_date = normTotal > 0 ? Math.round(special * normDD / normTotal) : special
+        intraday = normTotal > 0 ? Math.round(special * normID / normTotal) : 0
+      }
     } else {
-      const base = MONTH_BASE[m]?.[dow] ?? 3000
-      const jitter = 1 + Math.sin(d.getTime() / 86_400_000 * 3.7) * 0.04
-      total = Math.round(base * jitter)
+      // Apply a small ±3% jitter for realism
+      const jitter = 1 + Math.sin(d.getTime() / 86_400_000 * 3.7) * 0.03
+      due_date = Math.round(normDD * jitter)
+      intraday = Math.round(normID * jitter)
     }
-    out[key] = { total, due_date: Math.round(total * 0.72), intraday: Math.round(total * 0.28) }
+
+    out[key] = { total: due_date + intraday, due_date, intraday }
   }
   return out
 }
@@ -445,16 +477,16 @@ function HourlyThroughput({ total }: { total: number }) {
 
 // 6. Monthly summary table
 function MonthlyTable() {
-  const months = [7, 8, 9, 10, 11, 12]
+  const months = [6, 7, 8, 9, 10, 11, 12]
   const rows = months.map(m => {
     const days = Object.entries(FORECAST)
       .filter(([k]) => parseInt(k.slice(5, 7)) === m)
-      .map(([, v]) => v.total)
+      .map(([, v]) => v.due_date)  // FBS Suborders = Due Date only
     if (!days.length) return null
     const avg = Math.round(days.reduce((a, b) => a + b, 0) / days.length)
     const peak = Math.max(...days)
     const total = days.reduce((a, b) => a + b, 0)
-    const status = avg > 7000 ? 'peak' : avg > 4000 ? 'watch' : 'ok'
+    const status = avg > 15000 ? 'peak' : avg > 11000 ? 'watch' : 'ok'
     return { month: MONTHS_SHORT[m], avg, peak, total, status }
   }).filter(Boolean) as { month: string; avg: number; peak: number; total: number; status: string }[]
 
@@ -545,7 +577,7 @@ function CalendarNotes({ notes, onChange }: { notes: CalendarNote[]; onChange: (
     })
 
     // Find peak days
-    const peaks = upcoming.filter(u => u.data.total > 5000)
+    const peaks = upcoming.filter(u => u.data.total > 18000)
     if (peaks.length) {
       results.push({
         icon: '🔥', level: 'warn',
@@ -582,7 +614,7 @@ function CalendarNotes({ notes, onChange }: { notes: CalendarNote[]; onChange: (
     })
 
     // General upcoming high-demand
-    const highWeek = upcoming.slice(0, 7).filter(u => u.data.total > 3500 && !u.note)
+    const highWeek = upcoming.slice(0, 7).filter(u => u.data.total > 14000 && !u.note)
     if (highWeek.length >= 3) {
       results.push({
         icon: '⚠️', level: 'warn',
@@ -640,7 +672,7 @@ function CalendarNotes({ notes, onChange }: { notes: CalendarNote[]; onChange: (
             const isToday = toKey(today) === key
             const inForecast = !!FORECAST[key]
             const forecast = inForecast ? getForDay(key, []) : null
-            const isPeak = forecast && forecast.total > 7000
+            const isPeak = forecast && forecast.total > 20000
             const nc = note ? ntCfg(note.type) : null
             return (
               <div key={key} onClick={() => { setAddingDate(key); setForm(note ? { note: note.note, adjustment: note.adjustment, type: note.type } : { note: '', adjustment: 0, type: 'increase' }) }}
@@ -846,11 +878,11 @@ function AnnualChart({ notes }: { notes: CalendarNote[] }) {
     <div style={{ background: 'white', border: '0.5px solid #e5e5e5', borderRadius: 12, padding: '16px 18px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
         <div style={{ fontSize: 11, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-          Πρόβλεψη Ετήσιου Όγκου — Ιούλ → Δεκ 2025
+          Πρόβλεψη Ετήσιου Όγκου — Ιούν → Δεκ 2026
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           {[
-            { color: '#B5D4F4', label: 'Ιούλ–Σεπ' },
+            { color: '#B5D4F4', label: 'Ιούν–Σεπ' },
             { color: '#378ADD', label: 'Οκτ' },
             { color: '#185FA5', label: 'Δεκ' },
             { color: '#E24B4A', label: 'Νοε (Peak)' },
@@ -980,4 +1012,3 @@ export function ForecastPage() {
     </div>
   )
 }
-
