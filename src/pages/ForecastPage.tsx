@@ -371,11 +371,13 @@ function DemandDonut({ total }: { total: number }) {
 
 // 3b. Weekly stacked bar (required staff per day per role)
 function WeeklyStaffChart({ weekStart, notes }: { weekStart: Date; notes: CalendarNote[] }) {
+  const [selected, setSelected] = useState<string | null>(null)
+
   const data = Array.from({ length: 7 }, (_, i) => {
     const d = addDays(weekStart, i)
     const key = toKey(d)
-    const orders = getForDay(key, notes).total
-    const staff = staffForOrders(orders, key)
+    const forecast = getForDay(key, notes)
+    const staff = staffForOrders(forecast.total, key)
     const note = notes.find(n => n.date === key)
     return {
       name: DOW_LABELS[i],
@@ -384,6 +386,8 @@ function WeeklyStaffChart({ weekStart, notes }: { weekStart: Date; notes: Calend
       total: Object.values(staff).reduce((a, b) => a + b, 0),
       hasNote: !!note,
       noteType: note?.type,
+      due_date: forecast.due_date,
+      intraday: forecast.intraday,
     }
   })
 
@@ -394,7 +398,8 @@ function WeeklyStaffChart({ weekStart, notes }: { weekStart: Date; notes: Calend
     const total = payload.reduce((s: number, p: any) => s + p.value, 0)
     return (
       <div style={{ background: 'white', border: '0.5px solid #e5e5e5', borderRadius: 10, padding: '10px 14px', fontSize: 12 }}>
-        <div style={{ fontWeight: 500, marginBottom: 6 }}>{label} — {total} άτομα</div>
+        <div style={{ fontWeight: 500, marginBottom: 4 }}>{label} — {total} άτομα</div>
+        <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 6 }}>Κλίκ για αναλυτική ανάλυση</div>
         {payload.map((p: any) => (
           <div key={p.dataKey} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, color: '#6b7280' }}>
             <span style={{ color: p.fill }}>{ROLE_LABELS[p.dataKey]}</span>
@@ -405,22 +410,61 @@ function WeeklyStaffChart({ weekStart, notes }: { weekStart: Date; notes: Calend
     )
   }
 
+  // Detail panel for selected day
+  const selData = selected ? data.find(d => d.date === selected) : null
+  const selDate = selData ? new Date(selData.date + 'T12:00:00') : null
+  const dow = selDate ? selDate.getDay() : -1
+  const hasIntraday = selData ? selData.intraday > 0 && dow !== 5 && dow !== 6 : false
+
+  // Compute separate shifts for selected day
+  let ddStaff: Record<string, number> | null = null
+  let idStaff: Record<string, number> | null = null
+  if (selData) {
+    ddStaff = staffForOrders(selData.due_date, selData.date)
+    if (hasIntraday) {
+      // Intraday: use intraday orders with 8h window, fixed sorter/transporter = 1
+      const idOrders = selData.intraday
+      const month = parseInt(selData.date.slice(5, 7))
+      const asPct = AS_SPLIT[month] ?? 0.85
+      const asOrders = Math.round(idOrders * asPct)
+      const rafi = idOrders - asOrders
+      const packer = Math.ceil(idOrders / (PACKER_UPH * 8))
+      idStaff = {
+        operator:    Math.max(1, Math.ceil(asOrders / (OPERATOR_UPH * 8))),
+        picker:      Math.max(1, Math.ceil(rafi     / (PICKER_UPH   * 8))),
+        packer,
+        sorter:      1,
+        validator:   Math.max(1, Math.round(packer  * 0.25)),
+        transporter: 1,
+      }
+    }
+  }
+
   return (
     <div style={{ background: 'white', border: '0.5px solid #e5e5e5', borderRadius: 12, padding: '16px 18px' }}>
       <div style={{ fontSize: 11, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 14 }}>
         Απαιτούμενο Προσωπικό ανά Ημέρα (εβδομάδα)
+        <span style={{ marginLeft: 8, textTransform: 'none', fontSize: 10, color: '#d1d5db' }}>— κλίκ σε ημέρα για ανάλυση</span>
       </div>
       <ResponsiveContainer width="100%" height={180}>
-        <BarChart data={data} barSize={28}>
+        <BarChart data={data} barSize={28} onClick={(e: any) => {
+          if (e?.activePayload?.[0]) {
+            const date = e.activePayload[0].payload.date
+            setSelected(prev => prev === date ? null : date)
+          }
+        }} style={{ cursor: 'pointer' }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
           <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
           <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} width={28} />
           <Tooltip content={<CustomTooltip />} />
           {roles.map(r => (
-            <Bar key={r} dataKey={r} stackId="a" fill={ROLE_COLORS[r]} />
+            <Bar key={r} dataKey={r} stackId="a" fill={ROLE_COLORS[r]}
+              opacity={selected && data.find(d => d.date === selected)?.name !== undefined ? 1 : 1} />
           ))}
         </BarChart>
       </ResponsiveContainer>
+
+      {/* Legend */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 10 }}>
         {roles.map(r => (
           <div key={r} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -429,6 +473,63 @@ function WeeklyStaffChart({ weekStart, notes }: { weekStart: Date; notes: Calend
           </div>
         ))}
       </div>
+
+      {/* Detail panel */}
+      {selData && ddStaff && (
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: '0.5px solid #f0f0f0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, color: '#1a1a1a' }}>
+              {selDate?.toLocaleDateString('el-GR', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </div>
+            <div style={{ display: 'flex', gap: 10, fontSize: 11, color: '#6b7280' }}>
+              <span>📦 DD: {fmt(selData.due_date)}</span>
+              {hasIntraday && <span>🌙 Intraday: {fmt(selData.intraday)}</span>}
+            </div>
+            <button onClick={() => setSelected(null)}
+              style={{ background: 'none', border: 'none', fontSize: 16, color: '#9ca3af', cursor: 'pointer' }}>×</button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: hasIntraday ? '1fr 1fr' : '1fr', gap: 12 }}>
+            {/* Due Date shift */}
+            <div style={{ background: '#f9f9f7', borderRadius: 10, padding: '12px 14px' }}>
+              <div style={{ fontSize: 10, color: '#378ADD', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600, marginBottom: 10 }}>
+                Due Date βάρδια · {dow === 6 ? '09:00–17:00' : dow === 0 ? '11:00–19:00' : dow === 5 ? '06:00–21:00' : '06:00–19:00'}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 6 }}>
+                {roles.map(r => (
+                  <div key={r} style={{ background: ROLE_BG[r], borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 18, fontWeight: 500, color: ROLE_COLORS[r], fontFamily: 'monospace' }}>{ddStaff![r] ?? 0}</div>
+                    <div style={{ fontSize: 9, color: ROLE_COLORS[r], marginTop: 2 }}>{ROLE_LABELS[r]}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginTop: 8, fontSize: 11, color: '#6b7280', textAlign: 'right' }}>
+                Σύνολο: <strong>{Object.values(ddStaff).reduce((a, b) => a + b, 0)} άτομα</strong>
+              </div>
+            </div>
+
+            {/* Intraday shift */}
+            {hasIntraday && idStaff && (
+              <div style={{ background: '#f4f3fe', borderRadius: 10, padding: '12px 14px' }}>
+                <div style={{ fontSize: 10, color: '#7F77DD', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600, marginBottom: 10 }}>
+                  Intraday βάρδια · {dow === 0 ? '18:00–02:00' : '18:00–02:00'}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 6 }}>
+                  {roles.map(r => (
+                    <div key={r} style={{ background: 'white', borderRadius: 8, padding: '8px 10px', textAlign: 'center', border: `0.5px solid ${ROLE_COLORS[r]}30` }}>
+                      <div style={{ fontSize: 18, fontWeight: 500, color: ROLE_COLORS[r], fontFamily: 'monospace' }}>{idStaff![r] ?? 0}</div>
+                      <div style={{ fontSize: 9, color: ROLE_COLORS[r], marginTop: 2 }}>{ROLE_LABELS[r]}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ marginTop: 8, fontSize: 11, color: '#6b7280', textAlign: 'right' }}>
+                  Σύνολο: <strong>{Object.values(idStaff).reduce((a, b) => a + b, 0)} άτομα</strong>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
