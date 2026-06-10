@@ -26,6 +26,12 @@ const MONTHS_SHORT: Record<number, string> = {
 
 const CAPACITY_LIMIT = 22000 // max orders/day at full staffing
 
+// AutoStore % per month (rest = shelf/ράφι)
+const AS_SPLIT: Record<number, number> = {
+  6: 0.70, 7: 0.80,
+  8: 0.90, 9: 0.90, 10: 0.90, 11: 0.90, 12: 0.90,
+}
+
 const DEMAND_SPLIT = [
   { role: 'Picking',  key: 'picker',   pct: 0.45, color: '#378ADD' },
   { role: 'Packing',  key: 'packer',   pct: 0.25, color: '#1D9E75' },
@@ -200,9 +206,14 @@ function KPIBar({ day, prev, notes }: { day: string; prev: string; notes: Calend
   const today = getForDay(day, notes)
   const yesterday = getForDay(prev, notes)
   const staff = staffForOrders(today.total)
-  const totalStaff = Object.values(staff).reduce((a, b) => a + b, 0)
   const hours = workHours(today.total)
   const sla = slaScore(today.total, staff)
+
+  const m = parseInt(day.slice(5, 7))
+  const asPct = AS_SPLIT[m] ?? 0.90
+  const asOrders = Math.round(today.total * asPct)
+  const rafiOrders = today.total - asOrders
+  const migrationDone = asPct >= 0.90
 
   const kpis = [
     { label: 'Due Date', val: fmt(today.due_date), sub: 'παραγγελίες έως 19:00', color: '#378ADD' },
@@ -216,17 +227,40 @@ function KPIBar({ day, prev, notes }: { day: string; prev: string; notes: Calend
     },
   ]
 
-  const pct = yesterday.total > 0 ? Math.round((today.total / yesterday.total - 1) * 100) : 0
-
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
-      {kpis.map(k => (
-        <div key={k.label} style={{ background: 'white', border: '0.5px solid #e5e5e5', borderRadius: 12, padding: '14px 16px' }}>
-          <div style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>{k.label}</div>
-          <div style={{ fontSize: 24, fontWeight: 500, color: k.color, fontFamily: 'monospace', marginBottom: 4 }}>{k.val}</div>
-          <div style={{ fontSize: 11, color: '#9ca3af' }}>{k.sub}</div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
+        {kpis.map(k => (
+          <div key={k.label} style={{ background: 'white', border: '0.5px solid #e5e5e5', borderRadius: 12, padding: '14px 16px' }}>
+            <div style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>{k.label}</div>
+            <div style={{ fontSize: 24, fontWeight: 500, color: k.color, fontFamily: 'monospace', marginBottom: 4 }}>{k.val}</div>
+            <div style={{ fontSize: 11, color: '#9ca3af' }}>{k.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* AS vs Ράφι split */}
+      <div style={{ background: 'white', border: '0.5px solid #e5e5e5', borderRadius: 12, padding: '11px 16px', display: 'flex', alignItems: 'center', gap: 20 }}>
+        <div style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, whiteSpace: 'nowrap' }}>
+          Προέλευση παραγγελιών
         </div>
-      ))}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 13 }}>🤖</span>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>AutoStore</span>
+          <span style={{ fontSize: 16, fontWeight: 500, color: '#378ADD', fontFamily: 'monospace' }}>{fmt(asOrders)}</span>
+          <span style={{ fontSize: 11, color: '#378ADD', background: '#E6F1FB', padding: '1px 7px', borderRadius: 20 }}>{Math.round(asPct * 100)}%</span>
+        </div>
+        <div style={{ color: '#e5e5e5', fontSize: 18 }}>|</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 13 }}>📦</span>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>Ράφι</span>
+          <span style={{ fontSize: 16, fontWeight: 500, color: '#D85A30', fontFamily: 'monospace' }}>{fmt(rafiOrders)}</span>
+          <span style={{ fontSize: 11, color: '#D85A30', background: '#FAECE7', padding: '1px 7px', borderRadius: 20 }}>{Math.round((1 - asPct) * 100)}%</span>
+        </div>
+        <div style={{ marginLeft: 'auto', fontSize: 10, color: migrationDone ? '#3B6D11' : '#854F0B', background: migrationDone ? '#EAF3DE' : '#FAEEDA', padding: '2px 10px', borderRadius: 20 }}>
+          {migrationDone ? '✓ Migration AS 90% ολοκληρώθηκε' : `Migration AS σε εξέλιξη → ${Math.round(asPct * 100)}%`}
+        </div>
+      </div>
     </div>
   )
 }
