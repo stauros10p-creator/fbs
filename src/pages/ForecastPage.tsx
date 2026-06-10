@@ -224,7 +224,6 @@ function KPIBar({ day, prev, notes }: { day: string; prev: string; notes: Calend
   const hours = workHours(today.total, m)
   const sla = slaScore(today.total, staff)
 
-  const m = parseInt(day.slice(5, 7))
   const asPct = AS_SPLIT[m] ?? 0.90
   const asOrders = Math.round(today.total * asPct)
   const rafiOrders = today.total - asOrders
