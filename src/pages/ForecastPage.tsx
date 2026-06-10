@@ -40,11 +40,13 @@ const DEMAND_SPLIT = [
   { role: 'Άλλα',     key: 'other',    pct: 0.05, color: '#9ca3af' },
 ]
 
-// Staff needed per 1000 orders (calibrated from ops data)
-const STAFF_PER_1K: Record<string, number> = {
-  picker: 14, packer: 8, sorter: 5,
-  operator: 3, validator: 2, transporter: 2,
-}
+// Real UPH values (from productivity reports)
+const OPERATOR_UPH  = 161  // avg from 1-month operators data
+const PICKER_UPH    = 77   // avg from 3-month pickers data
+const PACKER_UPH    = 80   // fixed (per operations)
+const SORTER_UPH    = 150  // machine-assisted (belt feed + palletizing)
+const VALIDATOR_UPH = 50   // packer in training (<55 UPH)
+const EFF_HOURS     = 13   // effective daily hours for Due Date (06:00–19:00)
 const ROLE_LABELS: Record<string, string> = {
   picker: 'Picker', packer: 'Packer', sorter: 'Sorter',
   operator: 'Operator', validator: 'Validator', transporter: 'Transporter',
@@ -165,15 +167,27 @@ function getForDay(key: string, notes: CalendarNote[]) {
     intraday:  Math.round(base.intraday * mult),
   }
 }
-function staffForOrders(orders: number) {
-  const per1k = orders / 1000
-  const out: Record<string, number> = {}
-  for (const [role, rate] of Object.entries(STAFF_PER_1K)) out[role] = Math.ceil(per1k * rate)
-  return out
+function staffForOrders(orders: number, month?: number) {
+  const asPct     = month ? (AS_SPLIT[month] ?? 0.85) : 0.85
+  const asOrders  = Math.round(orders * asPct)
+  const rafi      = orders - asOrders
+  const packer    = Math.ceil(orders  / (PACKER_UPH   * EFF_HOURS))
+  return {
+    operator:    Math.max(2, Math.ceil(asOrders / (OPERATOR_UPH * EFF_HOURS))),
+    picker:      Math.max(1, Math.ceil(rafi     / (PICKER_UPH   * EFF_HOURS))),
+    packer,
+    sorter:      Math.max(2, Math.ceil(orders   / (SORTER_UPH   * EFF_HOURS))),
+    validator:   Math.max(1, Math.round(packer  * 0.25)),
+    transporter: Math.max(2, Math.ceil(orders   / 4500)),
+  }
 }
-function workHours(orders: number) {
-  // Each order = avg 1.4 handling events, each event = 0.6 min
-  return Math.round((orders * 1.4 * 0.6) / 60 * 10) / 10
+function workHours(orders: number, month?: number) {
+  const asPct    = month ? (AS_SPLIT[month] ?? 0.85) : 0.85
+  const asOrders = Math.round(orders * asPct)
+  const rafi     = orders - asOrders
+  const h = asOrders / OPERATOR_UPH + rafi / PICKER_UPH
+    + orders / PACKER_UPH + orders / SORTER_UPH
+  return Math.round(h * 10) / 10
 }
 function slaScore(orders: number, staff: Record<string, number>) {
   const needed = staffForOrders(orders)
@@ -205,8 +219,9 @@ const NOTE_TYPES = [
 function KPIBar({ day, prev, notes }: { day: string; prev: string; notes: CalendarNote[] }) {
   const today = getForDay(day, notes)
   const yesterday = getForDay(prev, notes)
-  const staff = staffForOrders(today.total)
-  const hours = workHours(today.total)
+  const m = parseInt(day.slice(5, 7))
+  const staff = staffForOrders(today.total, m)
+  const hours = workHours(today.total, m)
   const sla = slaScore(today.total, staff)
 
   const m = parseInt(day.slice(5, 7))
@@ -266,8 +281,8 @@ function KPIBar({ day, prev, notes }: { day: string; prev: string; notes: Calend
 }
 
 // 2. Staff cards
-function StaffCards({ orders }: { orders: number }) {
-  const staff = staffForOrders(orders)
+function StaffCards({ orders, month }: { orders: number; month?: number }) {
+  const staff = staffForOrders(orders, month)
   return (
     <div>
       <div style={{ fontSize: 11, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>
@@ -337,7 +352,7 @@ function WeeklyStaffChart({ weekStart, notes }: { weekStart: Date; notes: Calend
     const d = addDays(weekStart, i)
     const key = toKey(d)
     const orders = getForDay(key, notes).total
-    const staff = staffForOrders(orders)
+    const staff = staffForOrders(orders, parseInt(key.slice(5, 7)))
     const note = notes.find(n => n.date === key)
     return {
       name: DOW_LABELS[i],
@@ -398,7 +413,7 @@ function WeeklyStaffChart({ weekStart, notes }: { weekStart: Date; notes: Calend
 // 4. SLA prediction bars
 function SLABars({ day, notes }: { day: string; notes: CalendarNote[] }) {
   const { due_date, intraday, total } = getForDay(day, notes)
-  const staff = staffForOrders(total)
+  const staff = staffForOrders(total, parseInt(day.slice(5, 7)))
 
   const scenarios = [
     { label: 'Due Date (έως 19:00)', orders: due_date, cutoff: '19:00', color: '#378ADD' },
@@ -616,7 +631,7 @@ function CalendarNotes({ notes, onChange }: { notes: CalendarNote[]; onChange: (
       results.push({
         icon: '🔥', level: 'warn',
         title: `Peak αναμένεται ${DOW_LABELS[(peaks[0].d.getDay() + 6) % 7]} ${peaks[0].d.getDate()}/${peaks[0].d.getMonth() + 1}`,
-        body: `${fmt(peaks[0].data.total)} παραγγελίες — χρειάζεται ${Object.values(staffForOrders(peaks[0].data.total)).reduce((a, b) => a + b, 0)} άτομα.`,
+        body: `${fmt(peaks[0].data.total)} παραγγελίες — χρειάζεται ${Object.values(staffForOrders(peaks[0].data.total, peaks[0].d.getMonth() + 1)).reduce((a, b) => a + b, 0)} άτομα.`,
       })
     }
 
@@ -653,7 +668,7 @@ function CalendarNotes({ notes, onChange }: { notes: CalendarNote[]; onChange: (
       results.push({
         icon: '⚠️', level: 'warn',
         title: 'Αυξημένος όγκος εργασίας εβδομάδας',
-        body: `${highWeek.length} ημέρες με >3.500 παρ. — απαιτείται ~${Math.round(highWeek.reduce((a, u) => a + Object.values(staffForOrders(u.data.total)).reduce((x, y) => x + y, 0), 0) / highWeek.length)} άτομα/ημέρα.`,
+        body: `${highWeek.length} ημέρες με >14.000 παρ. — απαιτείται ~${Math.round(highWeek.reduce((a, u) => a + Object.values(staffForOrders(u.data.total, u.d.getMonth() + 1)).reduce((x, y) => x + y, 0), 0) / highWeek.length)} άτομα/ημέρα.`,
       })
     }
 
@@ -1018,7 +1033,7 @@ export function ForecastPage() {
 
         {/* 2. Staff cards */}
         <div style={{ background: 'white', border: '0.5px solid #e5e5e5', borderRadius: 12, padding: '16px 18px' }}>
-          <StaffCards orders={dayData.total} />
+          <StaffCards orders={dayData.total} month={parseInt(selectedDay.slice(5, 7))} />
         </div>
 
         {/* 3. Demand distribution + weekly chart */}
