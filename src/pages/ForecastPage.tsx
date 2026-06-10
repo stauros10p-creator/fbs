@@ -45,7 +45,6 @@ const OPERATOR_UPH  = 161  // avg from 1-month operators data
 const PICKER_UPH    = 77   // avg from 3-month pickers data
 const PACKER_UPH    = 80   // fixed (per operations)
 const SORTER_UPH    = 150  // machine-assisted (belt feed + palletizing)
-const VALIDATOR_UPH = 50   // packer in training (<55 UPH)
 // Effective working hours per day-of-week (for staffing calculations)
 const EFF_HOURS_BY_DOW: Record<number, number> = {
   0: 8,   // Κυριακή: 11:00–19:00
@@ -58,15 +57,15 @@ const EFF_HOURS_BY_DOW: Record<number, number> = {
 }
 const ROLE_LABELS: Record<string, string> = {
   picker: 'Picker', packer: 'Packer', sorter: 'Sorter',
-  operator: 'Operator', validator: 'Validator', transporter: 'Transporter',
+  operator: 'Operator', transporter: 'Transporter',
 }
 const ROLE_COLORS: Record<string, string> = {
   picker: '#378ADD', packer: '#1D9E75', sorter: '#D85A30',
-  operator: '#7F77DD', validator: '#BA7517', transporter: '#9ca3af',
+  operator: '#7F77DD', transporter: '#9ca3af',
 }
 const ROLE_BG: Record<string, string> = {
   picker: '#E6F1FB', packer: '#E1F5EE', sorter: '#FAECE7',
-  operator: '#EEEDFE', validator: '#FAEEDA', transporter: '#F1EFE8',
+  operator: '#EEEDFE', transporter: '#F1EFE8',
 }
 
 // Hourly distribution (% of daily volume per hour)
@@ -200,7 +199,6 @@ function staffForOrders(orders: number, dateKey?: string): Record<string, number
     picker:      Math.max(1, Math.ceil(rafi     / (PICKER_UPH   * H))),
     packer,
     sorter,
-    validator:   Math.max(1, Math.round(packer  * 0.25)),
     transporter,
   }
 }
@@ -391,7 +389,7 @@ function WeeklyStaffChart({ weekStart, notes }: { weekStart: Date; notes: Calend
     }
   })
 
-  const roles = ['picker', 'packer', 'sorter', 'operator', 'validator', 'transporter']
+  const roles = ['picker', 'packer', 'sorter', 'operator', 'transporter']
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null
@@ -434,8 +432,7 @@ function WeeklyStaffChart({ weekStart, notes }: { weekStart: Date; notes: Calend
         picker:      Math.max(1, Math.ceil(rafi     / (PICKER_UPH   * 8))),
         packer,
         sorter:      1,
-        validator:   Math.max(1, Math.round(packer  * 0.25)),
-        transporter: 1,
+            transporter: 1,
       }
     }
   }
