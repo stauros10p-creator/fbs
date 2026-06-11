@@ -254,6 +254,7 @@ export const MIN_COVERAGE: Record<EmployeeRole, number> = {
   validator:   1,
   sorter:      1,
   transporter: 2,
+  team_leader: 1,
 }
 
 export const DEFAULT_THROUGHPUT: Record<EmployeeRole, number> = {
@@ -263,4 +264,5 @@ export const DEFAULT_THROUGHPUT: Record<EmployeeRole, number> = {
   validator:   80,
   sorter:      150,
   transporter: 0,    // derived
+  team_leader: 0,    // supervisory role
 }
