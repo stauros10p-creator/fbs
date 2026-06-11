@@ -356,4 +356,3 @@ export function HourlyForecastPage() {
     </div>
   )
 }
-γ
