@@ -354,3 +354,8 @@ export function HourlyForecastPage() {
             </div>
           )
         )}
+      </div>
+    </div>
+  )
+}
+
