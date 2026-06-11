@@ -13,6 +13,7 @@ import {
 import type { EmployeeRole } from '@/types'
 import { initials, cn } from '@/lib/utils'
 import {
+  useEmployees,
   useEmployeeShifts,
   useUpdateEmployeeStatus,
   useRequestBreak,
@@ -66,12 +67,21 @@ export function EmployeeProfilePage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const employees = useAppStore(s => s.employees)
+  const { isLoading: empLoading } = useEmployees()
   const emp = employees.find(e => e.id === id)
 
   const [showModal, setShowModal] = useState(false)
   const updateStatus = useUpdateEmployeeStatus()
   const requestBreak = useRequestBreak()
   const { data: shifts, isLoading: shiftsLoading } = useEmployeeShifts(id, 30)
+
+  if (empLoading && !emp) {
+    return (
+      <div className="min-h-full flex items-center justify-center">
+        <div className="text-muted text-sm animate-pulse">Loading…</div>
+      </div>
+    )
+  }
 
   if (!emp) {
     return (
