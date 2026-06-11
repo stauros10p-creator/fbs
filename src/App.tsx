@@ -8,6 +8,7 @@ import { ForecastPage } from '@/pages/ForecastPage'
 import { OpsSnapshotPage } from '@/pages/OpsSnapshotPage'
 import { CopilotPage } from '@/pages/CopilotPage'
 import { StaffPlanPage } from '@/pages/StaffPlanPage'
+import { HourlyForecastPage } from '@/pages/HourlyForecastPage'
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
             <Route path="/ops" element={<OpsSnapshotPage />} />
             <Route path="/copilot" element={<CopilotPage />} />
             <Route path="/staff-plan" element={<StaffPlanPage />} />
+            <Route path="/hourly-forecast" element={<HourlyForecastPage />} />
           </Routes>
         </Layout>
       </DataLoader>

@@ -601,6 +601,7 @@ function SLABars({ day, notes }: { day: string; notes: CalendarNote[] }) {
 
 // 5. Hourly throughput
 function HourlyThroughput({ total }: { total: number }) {
+  const navigate = useNavigate()
   const data = HOURLY_DIST.map(h => {
     const recv = Math.round(total * h.recv)
     const comp = Math.round(total * h.comp)
@@ -627,8 +628,20 @@ function HourlyThroughput({ total }: { total: number }) {
   return (
     <div style={{ background: 'white', border: '0.5px solid #e5e5e5', borderRadius: 12, padding: '16px 18px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <div style={{ fontSize: 11, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-          Hourly Throughput
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 11, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            Forecast Hourly Throughput
+          </span>
+          <button
+            onClick={() => navigate('/hourly-forecast')}
+            style={{
+              background: '#f0f4ff', color: '#378ADD', border: 'none', borderRadius: 6,
+              padding: '2px 10px', fontSize: 10, fontWeight: 600, cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            📊 Ωριαία ανά ημέρα →
+          </button>
         </div>
         <div style={{ display: 'flex', gap: 14 }}>
           {[
@@ -1026,10 +1039,9 @@ function CalendarNotes({ notes, onChange }: { notes: CalendarNote[]; onChange: (
 
 // ── Annual chart ───────────────────────────────────────────────────────────────
 function AnnualChart({ notes }: { notes: CalendarNote[] }) {
-  // Weekly aggregates
   const weeks: { label: string; orders: number; month: number }[] = []
   const processed = new Set<string>()
-  for (const [key, v] of Object.entries(FORECAST)) {
+  for (const [key] of Object.entries(FORECAST)) {
     const d = new Date(key + 'T12:00:00')
     const dow = (d.getDay() + 6) % 7
     if (dow === 0 && !processed.has(key)) {
@@ -1109,30 +1121,18 @@ export function ForecastPage() {
     try { return JSON.parse(localStorage.getItem('forecast_notes') ?? '[]') } catch { return [] }
   })
 
-  // Persist notes
   useEffect(() => {
     localStorage.setItem('forecast_notes', JSON.stringify(notes))
   }, [notes])
 
   const dayData = getForDay(selectedDay, notes)
-
-  // Week start (Monday of selected day)
   const selDate = new Date(selectedDay + 'T12:00:00')
   const weekStart = addDays(selDate, -((selDate.getDay() + 6) % 7))
-
   const prevDay = toKey(addDays(new Date(selectedDay + 'T12:00:00'), -1))
-
   const displayDate = new Date(selectedDay + 'T12:00:00')
-
-  const s = {
-    label: { fontSize: 11, color: '#9ca3af', textTransform: 'uppercase' as const, letterSpacing: 0.5, fontWeight: 500 },
-    section: { display: 'flex', flexDirection: 'column' as const, gap: 10 },
-  }
 
   return (
     <div style={{ height: '100%', overflowY: 'auto', background: '#f5f5f0', fontFamily: 'Inter, sans-serif' }}>
-
-      {/* Header */}
       <div style={{ background: 'white', borderBottom: '0.5px solid #e5e5e5', padding: '16px 24px', position: 'sticky', top: 0, zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
@@ -1162,38 +1162,22 @@ export function ForecastPage() {
         </div>
       </div>
 
-      {/* Content */}
       <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-        {/* 1. KPIs */}
         <KPIBar day={selectedDay} prev={prevDay} notes={notes} />
-
-        {/* 2. Staff cards */}
         <div style={{ background: 'white', border: '0.5px solid #e5e5e5', borderRadius: 12, padding: '16px 18px' }}>
           <StaffCards orders={dayData.total} dateKey={selectedDay} />
         </div>
-
-        {/* 3. Demand distribution + weekly chart */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
           <DemandDonut total={dayData.total} />
           <WeeklyStaffChart weekStart={weekStart} notes={notes} />
         </div>
-
-        {/* 4+6. SLA + Hourly side by side */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
           <SLABars day={selectedDay} notes={notes} />
           <HourlyThroughput total={dayData.total} />
         </div>
-
-        {/* 5. Annual chart */}
         <AnnualChart notes={notes} />
-
-        {/* 7. Monthly table */}
         <MonthlyTable />
-
-        {/* 8. Calendar + insights */}
         <CalendarNotes notes={notes} onChange={setNotes} />
-
       </div>
     </div>
   )
