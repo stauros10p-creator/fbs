@@ -1,133 +1,84 @@
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { useAppStore } from '@/store'
+import { cn } from '@/lib/utils'
 
-const NAV_MAIN = [
+const NAV = [
   { to: '/dashboard', icon: '⊞', label: 'Dashboard' },
-  { to: '/planning',  icon: '📋', label: 'Daily Planning', isNew: true },
-  { to: '/ops',       icon: '📸', label: 'Ops Snapshot' },
+  { to: '/team',      icon: '👥', label: 'Employees' },
+  { to: '/ops',       icon: '🎯', label: 'Roles & Skills' },
+  { to: '/schedule',  icon: '📅', label: 'Daily Planning' },
+  { to: '/forecast',  icon: '⏱', label: 'Live Allocation' },
+  { to: '/breaks',    icon: '☕', label: 'Breaks', badge: true },
+  { to: '/workload',  icon: '📦', label: 'Workload' },
+  { to: '/reports',   icon: '📊', label: 'Reports' },
+  { to: '/copilot',   icon: '🤖', label: 'AI Copilot' },
+  { to: '/settings',  icon: '⚙️', label: 'Settings' },
 ]
-const NAV_TEAM = [
-  { to: '/team',      icon: '👥', label: 'Εργαζόμενοι' },
-  { to: '/schedule',  icon: '📅', label: 'Schedule' },
-  { to: '/breaks',    icon: '☕', label: 'Διαλείμματα', hasBadge: true },
-]
-const NAV_ANALYTICS = [
-  { to: '/productivity', icon: '📈', label: 'Παραγωγικότητα' },
-  { to: '/forecast',     icon: '🔮', label: 'Forecast' },
-  { to: '/reports',      icon: '📊', label: 'Reports' },
-  { to: '/copilot',      icon: '🤖', label: 'AI Copilot' },
-  { to: '/packaging',    icon: '📦', label: 'Συσκευασία SKUs' },  // ← ΕΔΩ
-]
-
-
-const S = {
-  sidebar: {
-    width: 210, flexShrink: 0, background: 'white',
-    borderRight: '0.5px solid #e5e5e5',
-    display: 'flex', flexDirection: 'column' as const,
-    fontFamily: 'Inter, sans-serif',
-  } as React.CSSProperties,
-  logo: {
-    padding: '18px 16px 14px',
-    borderBottom: '0.5px solid #f0f0f0',
-  },
-  logoBadge: {
-    background: '#f5f5f0', padding: '6px 12px',
-    borderRadius: 20, fontSize: 13, fontWeight: 500,
-    color: '#1a1a1a', display: 'inline-block',
-  },
-  nav: { flex: 1, padding: '12px 8px', overflowY: 'auto' as const },
-  section: {
-    fontSize: 9, color: '#9ca3af', letterSpacing: '0.8px',
-    textTransform: 'uppercase' as const, padding: '10px 8px 4px',
-    fontWeight: 600,
-  },
-  foot: {
-    padding: '12px 14px',
-    borderTop: '0.5px solid #f0f0f0',
-    display: 'flex', alignItems: 'center', gap: 10,
-  },
-  av: {
-    width: 30, height: 30, borderRadius: '50%',
-    background: '#1a1a1a', display: 'flex',
-    alignItems: 'center', justifyContent: 'center',
-    color: 'white', fontSize: 11, fontWeight: 500, flexShrink: 0,
-  },
-}
-
-function NavItem({ to, icon, label, isNew, hasBadge }: {
-  to: string; icon: string; label: string; isNew?: boolean; hasBadge?: boolean
-}) {
-  const alerts = useAppStore(s => s.alerts)
-  const unacked = alerts.filter(a => !a.acknowledged_at).length
-  const location = useLocation()
-  const isActive = location.pathname === to
-
-  return (
-    <NavLink to={to} style={{
-      display: 'flex', alignItems: 'center', gap: 9,
-      padding: '8px 10px', borderRadius: 8, marginBottom: 1,
-      fontSize: 13, fontWeight: isActive ? 500 : 400,
-      color: isActive ? 'white' : '#6b7280',
-      background: isActive ? '#1a1a1a' : 'transparent',
-      textDecoration: 'none', transition: 'all 0.1s',
-    }}>
-      <span style={{ fontSize: 15, width: 18, textAlign: 'center', flexShrink: 0 }}>{icon}</span>
-      <span style={{ flex: 1 }}>{label}</span>
-      {isNew && <span style={{ background: '#f0fdf4', color: '#16a34a', fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 10 }}>NEW</span>}
-      {hasBadge && unacked > 0 && <span style={{ background: '#ef4444', color: 'white', fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 10, minWidth: 18, textAlign: 'center' }}>{unacked}</span>}
-    </NavLink>
-  )
-}
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const engineResult = useAppStore(s => s.engineResult)
-  const risk = engineResult?.overall_risk ?? 0
-  const riskColor = risk < 0.3 ? '#22c55e' : risk < 0.6 ? '#f59e0b' : '#ef4444'
+  const alerts = useAppStore(s => s.alerts)
+  const unacked = alerts.filter(a => !a.acknowledged_at).length
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#f5f5f0' }}>
-      <aside style={S.sidebar}>
-        <div style={S.logo}>
-          <div style={S.logoBadge}>FBS Warehouse</div>
-        </div>
+    <div className="flex h-screen overflow-hidden" style={{ background: '#f0f2f7' }}>
 
-        <nav style={S.nav}>
-          <div style={S.section}>Κύριο</div>
-          {NAV_MAIN.map(n => <NavItem key={n.to} {...n} />)}
-          <div style={S.section}>Ομάδα</div>
-          {NAV_TEAM.map(n => <NavItem key={n.to} {...n} />)}
-          <div style={S.section}>Ανάλυση</div>
-          {NAV_ANALYTICS.map(n => <NavItem key={n.to} {...n} />)}
-        </nav>
+      {/* ── SIDEBAR ── */}
+      <aside className="w-48 flex-shrink-0 flex flex-col" style={{ background: '#1e2433' }}>
 
-        {/* SLA Risk */}
-        <div style={{ padding: '10px 14px', borderTop: '0.5px solid #f0f0f0', borderBottom: '0.5px solid #f0f0f0' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-            <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>SLA Risk</span>
-            <span style={{ fontSize: 12, fontWeight: 500, color: riskColor }}>{Math.round(risk * 100)}%</span>
-          </div>
-          <div style={{ height: 3, background: '#f0f0f0', borderRadius: 2, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${Math.round(risk * 100)}%`, background: riskColor, borderRadius: 2, transition: 'width 1s ease' }} />
-          </div>
-        </div>
-
-        <div style={S.foot}>
-          <div style={S.av}>ΣΤ</div>
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 500, color: '#1a1a1a' }}>Σταύρος</div>
-            <div style={{ fontSize: 10, color: '#9ca3af', display: 'flex', alignItems: 'center', gap: 4 }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e' }} className="pulse" />
-              Team Leader
+        {/* Logo */}
+        <div className="px-4 py-5 border-b" style={{ borderColor: 'rgba(255,255,255,0.07)' }}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-lg bg-blue flex items-center justify-center text-white font-bold text-sm flex-shrink-0">FB</div>
+            <div>
+              <div className="text-white font-bold text-sm leading-tight">Warehouse</div>
+              <div className="text-white font-bold text-sm leading-tight">Copilot</div>
             </div>
           </div>
         </div>
+
+        {/* Nav */}
+        <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
+          {NAV.map(({ to, icon, label, badge }) => (
+            <NavLink
+              key={to}
+              to={to}
+              className={({ isActive }) => cn(
+                'flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all',
+                isActive
+                  ? 'bg-blue text-white font-semibold'
+                  : 'text-white/55 hover:bg-white/10 hover:text-white/90',
+              )}
+            >
+              <span className="text-base w-5 text-center flex-shrink-0">{icon}</span>
+              <span className="flex-1">{label}</span>
+              {badge && unacked > 0 && (
+                <span className="bg-red text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                  {unacked}
+                </span>
+              )}
+            </NavLink>
+          ))}
+        </nav>
+
+        {/* User */}
+        <div className="p-4 border-t" style={{ borderColor: 'rgba(255,255,255,0.07)' }}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue to-purple flex items-center justify-center text-white font-bold text-xs flex-shrink-0">ΣΤ</div>
+            <div>
+              <div className="text-white font-semibold text-xs">Team Leader</div>
+              <div className="text-white/40 text-[10px] flex items-center gap-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-green animate-pulse2"/>Online
+              </div>
+            </div>
+          </div>
+          <div className="text-white/30 text-[10px] text-center mt-3 font-semibold tracking-wide">FBS Warehouse</div>
+        </div>
       </aside>
 
-      <main style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      {/* ── MAIN ── */}
+      <main className="flex-1 overflow-hidden flex flex-col">
         {children}
       </main>
     </div>
   )
 }
-
