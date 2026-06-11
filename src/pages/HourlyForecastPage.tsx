@@ -1,13 +1,11 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import * as XLSX from 'xlsx'
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from 'recharts'
 
-const AS_SPLIT: Record<number, number> = {
-  6: 0.70, 7: 0.80, 8: 0.90, 9: 0.90, 10: 0.90, 11: 0.90, 12: 0.90,
-}
 const DD_BASE: Record<number, { mon: number; twt: number; fri: number; sat: number; sun: number }> = {
   6:  { mon: 11267, twt: 10332, fri:  8650, sat:  6055, sun:  7798 },
   7:  { mon: 13135, twt: 12044, fri: 10084, sat:  7059, sun:  9091 },
@@ -32,22 +30,22 @@ const SPECIAL_DAYS: Record<string, number> = {
   '2026-12-25': 0, '2026-12-26': 0, '2026-12-31': 4500,
 }
 
-// DD hourly % distribution per JS getDay() (0=Sun,1=Mon,...,6=Sat) — from real throughput data
+// DD hourly % distribution — from real data (Total Orders - Intraday per hour)
 const DD_HOURLY: Record<number, number[]> = {
-  1: [3.7,1.9,0.9,0.4,0.4,0.3,0.5,1.3,2.5,4.2,5.7,6.7,6.8,6.3,6.3,5.6,5.6,5.5,5.7,5.2,5.6,6.1,6.6,6.1],
-  2: [3.3,1.9,0.9,0.5,0.3,0.3,0.6,1.4,2.9,4.6,5.8,6.1,6.8,6.0,5.7,5.2,5.4,6.0,5.9,5.6,5.8,6.1,6.8,6.1],
-  3: [3.7,2.0,1.0,0.6,0.4,0.4,0.6,1.6,3.0,4.7,6.0,6.3,6.6,6.1,5.9,4.7,6.6,5.5,5.2,5.5,5.1,5.8,6.4,6.0],
-  4: [3.8,2.0,1.0,0.6,0.4,0.4,0.6,1.8,3.2,4.9,5.8,6.6,6.7,6.4,6.0,5.9,5.4,5.4,5.3,5.4,5.1,5.8,6.2,5.7],
-  5: [3.4,2.1,1.0,0.6,0.4,0.3,0.8,1.8,3.1,4.9,6.1,7.2,7.3,6.5,6.4,6.1,5.9,6.3,6.0,5.1,4.8,4.8,4.7,4.3],
+  1: [3.9,2.2,1.0,0.5,0.4,0.3,0.6,1.4,2.8,4.7,6.4,7.5,7.6,7.1,7.0,6.3,6.3,6.2,6.3,3.9,4.1,4.6,4.5,4.3],
+  2: [3.7,2.1,1.0,0.6,0.4,0.4,0.7,1.6,3.3,5.3,6.7,7.0,7.8,7.0,6.6,6.0,6.2,6.9,6.8,3.7,3.9,4.1,4.2,3.8],
+  3: [4.1,2.3,1.2,0.7,0.4,0.4,0.7,1.9,3.5,5.4,6.9,7.3,7.7,7.1,6.8,5.5,7.7,6.4,6.0,3.7,3.3,3.7,4.0,3.5],
+  4: [4.2,2.3,1.1,0.7,0.4,0.4,0.7,2.1,3.7,5.6,6.7,7.6,7.8,7.4,6.9,6.8,6.2,6.2,6.1,3.4,3.2,3.8,3.7,3.1],
+  5: [3.2,2.1,1.0,0.6,0.4,0.3,0.8,1.8,3.1,4.9,6.1,7.2,7.3,6.5,6.4,6.1,5.9,6.3,6.1,5.1,4.8,4.8,4.7,4.3],
   6: [3.7,2.0,1.1,0.7,0.5,0.3,0.7,1.1,2.5,4.3,5.9,6.6,7.5,6.9,6.3,5.9,5.9,5.9,5.7,5.9,5.8,5.4,4.8,4.4],
-  0: [2.8,1.9,1.2,0.7,0.4,0.3,0.3,0.7,1.8,3.5,4.7,5.9,6.6,6.4,6.2,5.6,5.7,6.1,6.3,6.3,6.2,7.0,7.1,6.5],
+  0: [3.5,2.3,1.4,0.8,0.5,0.3,0.4,0.9,2.2,4.3,5.8,7.3,8.1,7.9,7.6,6.9,7.0,7.5,4.4,3.9,3.9,4.6,4.5,4.2],
 }
-// Intraday: Mon-Thu 19-24h active, Sun 18-24h, Fri/Sat = 0
+// Intraday hourly % — Mon-Thu/Sun active, Fri/Sat = 0
 const ID_HOURLY: Record<number, number[]> = {
-  1: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,16.3,18.5,19.7,24.1,21.4],
-  2: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,18.4,18.0,19.2,23.5,21.0],
-  3: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,17.4,17.1,19.7,22.5,23.2],
-  4: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,18.4,17.0,19.4,22.4,22.8],
+  1: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,15.9,18.1,19.1,23.4,20.9],
+  2: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,18.2,17.8,19.0,23.3,20.8],
+  3: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,17.2,16.8,19.3,22.2,22.8],
+  4: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,18.0,16.7,19.0,22.0,22.3],
   5: Array(24).fill(0),
   6: Array(24).fill(0),
   0: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,14.7,16.8,15.9,17.3,18.8,16.4],
@@ -58,7 +56,7 @@ const MONTHS_GR: Record<number, string> = {
   10:'Οκτώβριος',11:'Νοέμβριος',12:'Δεκέμβριος',
 }
 const DOW_GR = ['Κυρ','Δευ','Τρι','Τετ','Πεμ','Παρ','Σαβ']
-const HOURS = Array.from({length:24}, (_,i) => `${String(i).padStart(2,'0')}–${String(i+1).padStart(2,'0')}`)
+const HOURS = Array.from({length:24}, (_,i) => `${String(i).padStart(2,'0')}-${String(i+1).padStart(2,'0')}`)
 
 function fmt(n: number) { return Math.round(n).toLocaleString('el-GR') }
 
@@ -92,14 +90,16 @@ function getHourlyData(dateKey: string) {
   const dow = new Date(dateKey+'T12:00:00').getDay()
   const ddDist = DD_HOURLY[dow] ?? Array(24).fill(0)
   const idDist = ID_HOURLY[dow] ?? Array(24).fill(0)
-  const ddSum = ddDist.reduce((a,b)=>a+b,0)
-  const idSum = idDist.reduce((a,b)=>a+b,0)
+  const ddSum = ddDist.reduce((a:number,b:number)=>a+b,0)
+  const idSum = idDist.reduce((a:number,b:number)=>a+b,0)
   let cumDD = 0, cumID = 0
   return HOURS.map((hr, i) => {
     const dd = ddSum>0 ? Math.round(f.due_date * ddDist[i]/ddSum) : 0
     const id = idSum>0 ? Math.round(f.intraday * idDist[i]/idSum) : 0
+    // Backlog hours: 00-06 (overnight) and 19-23
+    const isBacklogHour = i < 7 || i >= 19
     cumDD += dd; cumID += id
-    return { hr, dd, id, total: dd+id, cumDD, cumID }
+    return { hr, dd, id, total: dd+id, cumDD, cumID, isBacklogHour }
   })
 }
 
@@ -128,12 +128,38 @@ export function HourlyForecastPage() {
   const selDow = selectedDay ? new Date(selectedDay+'T12:00:00').getDay() : -1
   const peakHour = hourlyData.length ? hourlyData.reduce((a,b)=>b.total>a.total?b:a) : null
 
+  // Totals from hourly breakdown
+  const totalDD = hourlyData.reduce((s,r)=>s+r.dd,0)
+  const totalID = hourlyData.reduce((s,r)=>s+r.id,0)
+  const totalAll = totalDD + totalID
+
+  // Backlog = DD orders in hours 00-06 and 19-23
+  const backlog = hourlyData.filter(r=>r.isBacklogHour).reduce((s,r)=>s+r.dd,0)
+
   function getDayTotal(d: number) {
     const key = `${year}-${String(activeMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`
     const f = FORECAST[key]
     return f ? f.due_date+f.intraday : 0
   }
   const maxTotal = Math.max(...days.filter(Boolean).map(d=>getDayTotal(d as number)), 1)
+
+  function exportToExcel() {
+    if (!selectedDay || !selForecast) return
+    const rows = hourlyData.map(r => ({
+      'Ώρα': r.hr,
+      'Due Date': r.dd,
+      'Intraday': r.id,
+      'Σύνολο': r.total,
+      'Αθροιστικό DD': r.cumDD,
+      'Αθροιστικό Intraday': r.cumID,
+      'Backlog ώρα': r.isBacklogHour ? r.dd : 0,
+    }))
+    const ws = XLSX.utils.json_to_sheet(rows)
+    ws['!cols'] = [{wch:12},{wch:10},{wch:10},{wch:10},{wch:14},{wch:18},{wch:14}]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, selectedDay)
+    XLSX.writeFile(wb, `hourly_forecast_${selectedDay}.xlsx`)
+  }
 
   const CustomTooltip = ({active, payload, label}: any) => {
     if (!active||!payload?.length) return null
@@ -160,7 +186,6 @@ export function HourlyForecastPage() {
     <div style={{height:'100%',overflowY:'auto',background:'#f5f5f0',fontFamily:'Inter, sans-serif'}}>
       <div style={{padding:'20px 24px',maxWidth:1200,margin:'0 auto'}}>
 
-        {/* Header */}
         <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:20}}>
           <button onClick={()=>navigate('/forecast')}
             style={{background:'none',border:'0.5px solid #e5e5e5',borderRadius:8,padding:'6px 12px',fontSize:13,color:'#6b7280',cursor:'pointer'}}>
@@ -174,7 +199,6 @@ export function HourlyForecastPage() {
           </div>
         </div>
 
-        {/* Month tabs */}
         <div style={{display:'flex',gap:6,marginBottom:20,flexWrap:'wrap'}}>
           {[6,7,8,9,10,11,12].map(m => (
             <button key={m} onClick={()=>{setActiveMonth(m);setSelectedDay(null)}}
@@ -187,7 +211,6 @@ export function HourlyForecastPage() {
 
         <div style={{display:'grid',gridTemplateColumns:selectedDay?'280px 1fr':'360px',gap:16,alignItems:'start'}}>
 
-          {/* Calendar */}
           <div style={{background:'white',border:'0.5px solid #e5e5e5',borderRadius:12,padding:'16px'}}>
             <div style={{fontSize:13,fontWeight:500,color:'#1a1a1a',marginBottom:12,textAlign:'center'}}>
               {MONTHS_GR[activeMonth]} {year}
@@ -230,48 +253,66 @@ export function HourlyForecastPage() {
             </div>
           </div>
 
-          {/* Chart panel */}
           {selectedDay && selForecast ? (
             <div style={{display:'flex',flexDirection:'column',gap:12}}>
 
-              {/* Day header */}
+              {/* Day header card */}
               <div style={{background:'white',border:'0.5px solid #e5e5e5',borderRadius:12,padding:'14px 18px'}}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}}>
-                  <div>
-                    <div style={{fontSize:15,fontWeight:600,color:'#1a1a1a'}}>
-                      {new Date(selectedDay+'T12:00:00').toLocaleDateString('el-GR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:12}}>
+                  <div style={{display:'flex',alignItems:'flex-start',gap:10}}>
+                    <div>
+                      <div style={{fontSize:15,fontWeight:600,color:'#1a1a1a'}}>
+                        {new Date(selectedDay+'T12:00:00').toLocaleDateString('el-GR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
+                      </div>
+                      <div style={{fontSize:12,color:'#9ca3af',marginTop:2}}>
+                        {DOW_GR[selDow]} · {MONTHS_GR[activeMonth]} {year}
+                      </div>
                     </div>
-                    <div style={{fontSize:12,color:'#9ca3af',marginTop:2}}>
-                      {DOW_GR[selDow]} · {MONTHS_GR[activeMonth]} {year}
-                    </div>
+                    <button onClick={exportToExcel}
+                      style={{marginTop:2,padding:'5px 12px',background:'#f0fdf4',border:'0.5px solid #86efac',borderRadius:8,fontSize:12,color:'#16a34a',cursor:'pointer',fontWeight:500,whiteSpace:'nowrap'}}>
+                      ⬇ Excel
+                    </button>
                   </div>
-                  <div style={{display:'flex',gap:16,flexWrap:'wrap'}}>
-                    <div style={{textAlign:'center'}}>
-                      <div style={{fontSize:11,color:'#378ADD'}}>Due Date</div>
-                      <div style={{fontSize:20,fontWeight:600,color:'#378ADD',fontFamily:'monospace'}}>{fmt(selForecast.due_date)}</div>
+                  <div style={{display:'flex',gap:20,flexWrap:'wrap',alignItems:'flex-start'}}>
+                    {/* Due Date */}
+                    <div style={{textAlign:'center',minWidth:70}}>
+                      <div style={{fontSize:11,color:'#378ADD',textTransform:'uppercase',letterSpacing:0.3}}>Due Date</div>
+                      <div style={{fontSize:22,fontWeight:700,color:'#378ADD',fontFamily:'monospace',lineHeight:1.2}}>{fmt(totalDD)}</div>
+                      <div style={{fontSize:10,color:'#9ca3af',marginTop:1}}>παραγγελίες</div>
                     </div>
+                    {/* Intraday */}
                     {selForecast.intraday>0&&(
-                      <div style={{textAlign:'center'}}>
-                        <div style={{fontSize:11,color:'#7F77DD'}}>Intraday</div>
-                        <div style={{fontSize:20,fontWeight:600,color:'#7F77DD',fontFamily:'monospace'}}>{fmt(selForecast.intraday)}</div>
+                      <div style={{textAlign:'center',minWidth:70}}>
+                        <div style={{fontSize:11,color:'#7F77DD',textTransform:'uppercase',letterSpacing:0.3}}>Intraday</div>
+                        <div style={{fontSize:22,fontWeight:700,color:'#7F77DD',fontFamily:'monospace',lineHeight:1.2}}>{fmt(totalID)}</div>
+                        <div style={{fontSize:10,color:'#9ca3af',marginTop:1}}>παραγγελίες</div>
                       </div>
                     )}
-                    <div style={{textAlign:'center'}}>
-                      <div style={{fontSize:11,color:'#1a1a1a'}}>Σύνολο</div>
-                      <div style={{fontSize:20,fontWeight:600,color:'#1a1a1a',fontFamily:'monospace'}}>{fmt(selForecast.due_date+selForecast.intraday)}</div>
+                    {/* Σύνολο */}
+                    <div style={{textAlign:'center',minWidth:70}}>
+                      <div style={{fontSize:11,color:'#1a1a1a',textTransform:'uppercase',letterSpacing:0.3}}>Σύνολο</div>
+                      <div style={{fontSize:22,fontWeight:700,color:'#1a1a1a',fontFamily:'monospace',lineHeight:1.2}}>{fmt(totalAll)}</div>
+                      <div style={{fontSize:10,color:'#9ca3af',marginTop:1}}>παραγγελίες</div>
                     </div>
+                    {/* Backlog */}
+                    <div style={{textAlign:'center',minWidth:70,background:'#fffbeb',borderRadius:8,padding:'6px 10px',border:'0.5px solid #fde68a'}}>
+                      <div style={{fontSize:11,color:'#b45309',textTransform:'uppercase',letterSpacing:0.3}}>Backlog αύριο</div>
+                      <div style={{fontSize:22,fontWeight:700,color:'#b45309',fontFamily:'monospace',lineHeight:1.2}}>{fmt(backlog)}</div>
+                      <div style={{fontSize:10,color:'#9ca3af',marginTop:1}}>{totalDD>0?`${Math.round(backlog/totalDD*100)}% του DD`:''}</div>
+                    </div>
+                    {/* Peak */}
                     {peakHour&&peakHour.total>0&&(
-                      <div style={{textAlign:'center'}}>
-                        <div style={{fontSize:11,color:'#D85A30'}}>Peak ώρα</div>
-                        <div style={{fontSize:16,fontWeight:600,color:'#D85A30'}}>{peakHour.hr}</div>
-                        <div style={{fontSize:11,color:'#9ca3af'}}>{fmt(peakHour.total)} παρ.</div>
+                      <div style={{textAlign:'center',minWidth:60}}>
+                        <div style={{fontSize:11,color:'#D85A30',textTransform:'uppercase',letterSpacing:0.3}}>Peak ώρα</div>
+                        <div style={{fontSize:16,fontWeight:700,color:'#D85A30',lineHeight:1.2}}>{peakHour.hr}</div>
+                        <div style={{fontSize:10,color:'#9ca3af',marginTop:1}}>{fmt(peakHour.total)} παρ.</div>
                       </div>
                     )}
                   </div>
                 </div>
               </div>
 
-              {/* Hourly chart */}
+              {/* Chart */}
               <div style={{background:'white',border:'0.5px solid #e5e5e5',borderRadius:12,padding:'16px 18px'}}>
                 <div style={{fontSize:11,color:'#9ca3af',textTransform:'uppercase',letterSpacing:0.5,marginBottom:14}}>
                   Ωριαία Κατανομή Παραγγελιών
@@ -293,13 +334,14 @@ export function HourlyForecastPage() {
                   </ComposedChart>
                 </ResponsiveContainer>
                 <div style={{display:'flex',gap:16,marginTop:8,fontSize:11,color:'#6b7280',flexWrap:'wrap'}}>
-                  <span><span style={{display:'inline-block',width:10,height:10,background:'#378ADD',borderRadius:2,marginRight:4}}></span>Due Date (ανά ώρα)</span>
-                  {selForecast.intraday>0&&<span><span style={{display:'inline-block',width:10,height:10,background:'#7F77DD',borderRadius:2,marginRight:4}}></span>Intraday (ανά ώρα)</span>}
+                  <span><span style={{display:'inline-block',width:10,height:10,background:'#378ADD',borderRadius:2,marginRight:4}}></span>Due Date</span>
+                  {selForecast.intraday>0&&<span><span style={{display:'inline-block',width:10,height:10,background:'#7F77DD',borderRadius:2,marginRight:4}}></span>Intraday</span>}
                   <span><span style={{display:'inline-block',width:24,height:2,background:'#D85A30',marginRight:4,verticalAlign:'middle'}}></span>Αθροιστικό DD</span>
+                  <span style={{color:'#b45309'}}>🕗 Backlog: ώρες 00-06 & 19-23</span>
                 </div>
               </div>
 
-              {/* Hour table */}
+              {/* Hourly table */}
               <div style={{background:'white',border:'0.5px solid #e5e5e5',borderRadius:12,padding:'16px 18px'}}>
                 <div style={{fontSize:11,color:'#9ca3af',textTransform:'uppercase',letterSpacing:0.5,marginBottom:12}}>
                   Αναλυτικός Πίνακας ανά Ώρα
@@ -313,7 +355,8 @@ export function HourlyForecastPage() {
                         {selForecast.intraday>0&&<th style={{textAlign:'right',padding:'6px 10px',color:'#7F77DD',fontWeight:500}}>Intraday</th>}
                         <th style={{textAlign:'right',padding:'6px 10px',color:'#1a1a1a',fontWeight:600}}>Σύνολο</th>
                         <th style={{textAlign:'right',padding:'6px 10px',color:'#D85A30',fontWeight:500}}>Αθρ. DD</th>
-                        <th style={{padding:'6px 10px',width:120}}></th>
+                        <th style={{textAlign:'right',padding:'6px 10px',color:'#b45309',fontWeight:500}}>Backlog</th>
+                        <th style={{padding:'6px 10px',width:100}}></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -321,21 +364,37 @@ export function HourlyForecastPage() {
                         const isPeak=peakHour&&r.hr===peakHour.hr
                         const barPct=peakHour?Math.round(r.total/peakHour.total*100):0
                         return (
-                          <tr key={r.hr} style={{background:isPeak?'#fffbeb':i%2===0?'white':'#fcfcfb',borderBottom:'0.5px solid #f5f5f5'}}>
-                            <td style={{padding:'6px 10px',fontFamily:'monospace',fontWeight:isPeak?600:400,color:'#1a1a1a'}}>{r.hr}</td>
+                          <tr key={r.hr} style={{background:r.isBacklogHour?'#fffdf5':isPeak?'#fffbeb':i%2===0?'white':'#fcfcfb',borderBottom:'0.5px solid #f5f5f5'}}>
+                            <td style={{padding:'6px 10px',fontFamily:'monospace',fontWeight:isPeak?600:400,color:'#1a1a1a'}}>
+                              {r.hr}
+                              {r.isBacklogHour&&<span style={{marginLeft:4,fontSize:9,color:'#b45309',background:'#fef9c3',borderRadius:3,padding:'1px 4px'}}>backlog</span>}
+                            </td>
                             <td style={{padding:'6px 10px',textAlign:'right',fontFamily:'monospace',color:'#378ADD'}}>{r.dd>0?fmt(r.dd):'—'}</td>
                             {selForecast.intraday>0&&<td style={{padding:'6px 10px',textAlign:'right',fontFamily:'monospace',color:'#7F77DD'}}>{r.id>0?fmt(r.id):'—'}</td>}
                             <td style={{padding:'6px 10px',textAlign:'right',fontFamily:'monospace',fontWeight:600,color:isPeak?'#b45309':'#1a1a1a'}}>{fmt(r.total)}</td>
                             <td style={{padding:'6px 10px',textAlign:'right',fontFamily:'monospace',color:'#D85A30',fontSize:11}}>{fmt(r.cumDD)}</td>
+                            <td style={{padding:'6px 10px',textAlign:'right',fontFamily:'monospace',color:'#b45309',fontSize:11}}>{r.isBacklogHour&&r.dd>0?fmt(r.dd):'—'}</td>
                             <td style={{padding:'6px 10px'}}>
                               <div style={{height:6,background:'#f5f5f3',borderRadius:3,overflow:'hidden'}}>
-                                <div style={{height:'100%',borderRadius:3,width:`${barPct}%`,background:isPeak?'#f59e0b':'#378ADD'}}></div>
+                                <div style={{height:'100%',borderRadius:3,width:`${barPct}%`,background:isPeak?'#f59e0b':r.isBacklogHour?'#fbbf24':'#378ADD'}}></div>
                               </div>
                             </td>
                           </tr>
                         )
                       })}
                     </tbody>
+                    {/* Totals row */}
+                    <tfoot>
+                      <tr style={{background:'#f0f4ff',borderTop:'1.5px solid #c7d2fe',fontWeight:700}}>
+                        <td style={{padding:'8px 10px',fontSize:12,color:'#3730a3'}}>Σύνολο ημέρας</td>
+                        <td style={{padding:'8px 10px',textAlign:'right',fontFamily:'monospace',color:'#378ADD',fontSize:13}}>{fmt(totalDD)}</td>
+                        {selForecast.intraday>0&&<td style={{padding:'8px 10px',textAlign:'right',fontFamily:'monospace',color:'#7F77DD',fontSize:13}}>{fmt(totalID)}</td>}
+                        <td style={{padding:'8px 10px',textAlign:'right',fontFamily:'monospace',color:'#1a1a1a',fontSize:13}}>{fmt(totalAll)}</td>
+                        <td style={{padding:'8px 10px',textAlign:'right',fontFamily:'monospace',color:'#D85A30',fontSize:11}}>{fmt(totalDD)}</td>
+                        <td style={{padding:'8px 10px',textAlign:'right',fontFamily:'monospace',color:'#b45309',fontSize:13}}>{fmt(backlog)}</td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
               </div>
