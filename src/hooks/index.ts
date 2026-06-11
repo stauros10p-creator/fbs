@@ -144,7 +144,9 @@ export function useUpsertForecast() {
   return useMutation({
     mutationFn: async (values: {
       due_date_orders: number
+      same_day_orders: number
       intraday_orders: number
+      backlog_orders: number
     }) => {
       const { data, error } = await supabase
         .from('daily_forecasts')
@@ -211,7 +213,9 @@ export function useCreateOpsSnapshot() {
       pending_picking: number
       pending_packing: number
       pending_sorting: number
+      backlog_orders: number
       remaining_due_date: number
+      remaining_same_day: number
       remaining_intraday: number
       notes?: string
     }) => {
@@ -508,6 +512,24 @@ Never be vague. If you suggest a reallocation, name the specific employees and r
       ])
 
       return assistantMessage
+    },
+  })
+}
+
+// ---- Employee Shifts (by employee) ----
+export function useEmployeeShifts(employeeId: string | undefined, limit = 30) {
+  return useQuery({
+    queryKey: ['employee-shifts', employeeId, limit],
+    enabled: !!employeeId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('shifts')
+        .select('*')
+        .eq('employee_id', employeeId!)
+        .order('shift_date', { ascending: false })
+        .limit(limit)
+      if (error) throw error
+      return data as Shift[]
     },
   })
 }

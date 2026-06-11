@@ -9,6 +9,7 @@ import { OpsSnapshotPage } from '@/pages/OpsSnapshotPage'
 import { CopilotPage } from '@/pages/CopilotPage'
 import { StaffPlanPage } from '@/pages/StaffPlanPage'
 import { HourlyForecastPage } from '@/pages/HourlyForecastPage'
+import { EmployeeProfilePage } from '@/pages/EmployeeProfilePage'
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/team" element={<TeamPage />} />
+            <Route path="/team/:id" element={<EmployeeProfilePage />} />
             <Route path="/schedule" element={<SchedulePage />} />
             <Route path="/forecast" element={<ForecastPage />} />
             <Route path="/ops" element={<OpsSnapshotPage />} />
