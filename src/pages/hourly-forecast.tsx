@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend,
+  Tooltip, ResponsiveContainer,
 } from 'recharts'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -108,8 +108,8 @@ function getHourlyData(dateKey: string) {
 }
 
 // ── Calendar helper ────────────────────────────────────────────────────────────
-function getDaysInMonth(year: number, month: number) {
-  const days = []
+function getDaysInMonth(year: number, month: number): (number | null)[] {
+  const days: (number | null)[] = []
   const first = new Date(year, month-1, 1).getDay() // 0=Sun
   const total = new Date(year, month, 0).getDate()
   // leading blanks (Mon-first grid)
@@ -354,7 +354,3 @@ export function HourlyForecastPage() {
             </div>
           )
         )}
-      </div>
-    </div>
-  )
-}

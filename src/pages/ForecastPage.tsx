@@ -2,8 +2,8 @@ import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line,
-  ComposedChart, Area, ReferenceLine,
+  ResponsiveContainer, PieChart, Pie, Cell, Line,
+  ComposedChart, ReferenceLine,
 } from 'recharts'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
