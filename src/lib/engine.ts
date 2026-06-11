@@ -171,6 +171,7 @@ export function runAllocationEngine(
     validator: 2,
     sorter: 4,
     transporter: 5,
+    team_leader: 0,
   }
 
   if (forecast) {
