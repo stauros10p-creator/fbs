@@ -1,58 +1,65 @@
 import { NavLink } from 'react-router-dom'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
+import {
+  LayoutDashboard, Truck, Users, BarChart2, CalendarDays,
+  ShieldCheck, FileBarChart, Bell, Cpu, Settings,
+} from 'lucide-react'
 
 const NAV = [
-  { to: '/dashboard', icon: '⊞', label: 'Dashboard' },
-  { to: '/team',      icon: '👥', label: 'Employees' },
-  { to: '/ops',       icon: '🎯', label: 'Roles & Skills' },
-  { to: '/schedule',  icon: '📅', label: 'Daily Planning' },
-  { to: '/forecast',  icon: '⏱', label: 'Live Allocation' },
-  { to: '/breaks',    icon: '☕', label: 'Breaks', badge: true },
-  { to: '/workload',  icon: '📦', label: 'Workload' },
-  { to: '/reports',   icon: '📊', label: 'Reports' },
-  { to: '/copilot',   icon: '🤖', label: 'AI Copilot' },
-  { to: '/settings',  icon: '⚙️', label: 'Settings' },
+  { to: '/dashboard',       Icon: LayoutDashboard, label: 'Dashboard'    },
+  { to: '/ops',             Icon: Truck,           label: 'Operations'   },
+  { to: '/team',            Icon: Users,           label: 'Employees'    },
+  { to: '/forecast',        Icon: BarChart2,       label: 'Forecast'     },
+  { to: '/staff-plan',      Icon: CalendarDays,    label: 'Planning'     },
+  { to: '/schedule',        Icon: ShieldCheck,     label: 'SLA Monitor'  },
+  { to: '/hourly-forecast', Icon: FileBarChart,    label: 'Reports'      },
+  { to: '/copilot',         Icon: Bell,            label: 'Alerts', badge: true },
+  { to: '/copilot',         Icon: Cpu,             label: 'Algorithms'   },
+  { to: '/copilot',         Icon: Settings,        label: 'Settings'     },
 ]
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const alerts = useAppStore(s => s.alerts)
+  const alerts  = useAppStore(s => s.alerts)
   const unacked = alerts.filter(a => !a.acknowledged_at).length
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: '#f0f2f7' }}>
+    <div className="flex h-screen overflow-hidden bg-slate-50">
 
       {/* ── SIDEBAR ── */}
-      <aside className="w-48 flex-shrink-0 flex flex-col" style={{ background: '#1e2433' }}>
+      <aside className="w-52 flex-shrink-0 flex flex-col bg-slate-900">
 
         {/* Logo */}
-        <div className="px-4 py-5 border-b" style={{ borderColor: 'rgba(255,255,255,0.07)' }}>
+        <div className="px-4 py-5 border-b border-white/10">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-lg bg-blue flex items-center justify-center text-white font-bold text-sm flex-shrink-0">FB</div>
-            <div>
-              <div className="text-white font-bold text-sm leading-tight">Warehouse</div>
-              <div className="text-white font-bold text-sm leading-tight">Copilot</div>
+            <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+              WC
+            </div>
+            <div className="leading-tight">
+              <div className="text-white font-bold text-sm">Warehouse</div>
+              <div className="text-white/60 text-[11px] font-medium">Copilot</div>
             </div>
           </div>
         </div>
 
         {/* Nav */}
         <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
-          {NAV.map(({ to, icon, label, badge }) => (
+          {NAV.map(({ to, Icon, label, badge }, i) => (
             <NavLink
-              key={to}
+              key={`${to}-${i}`}
               to={to}
+              end={to === '/dashboard'}
               className={({ isActive }) => cn(
-                'flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all',
+                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all',
                 isActive
-                  ? 'bg-blue text-white font-semibold'
-                  : 'text-white/55 hover:bg-white/10 hover:text-white/90',
+                  ? 'bg-blue-600 text-white'
+                  : 'text-white/55 hover:bg-white/8 hover:text-white/90',
               )}
             >
-              <span className="text-base w-5 text-center flex-shrink-0">{icon}</span>
+              <Icon className="w-4 h-4 flex-shrink-0" />
               <span className="flex-1">{label}</span>
               {badge && unacked > 0 && (
-                <span className="bg-red text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                <span className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
                   {unacked}
                 </span>
               )}
@@ -61,17 +68,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </nav>
 
         {/* User */}
-        <div className="p-4 border-t" style={{ borderColor: 'rgba(255,255,255,0.07)' }}>
+        <div className="p-4 border-t border-white/10">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue to-purple flex items-center justify-center text-white font-bold text-xs flex-shrink-0">ΣΤ</div>
-            <div>
-              <div className="text-white font-semibold text-xs">Team Leader</div>
-              <div className="text-white/40 text-[10px] flex items-center gap-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-green animate-pulse2"/>Online
-              </div>
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+              SP
+            </div>
+            <div className="min-w-0">
+              <div className="text-white font-semibold text-xs truncate">Stavros</div>
+              <div className="text-white/45 text-[10px] truncate">Warehouse shift supervisor</div>
             </div>
           </div>
-          <div className="text-white/30 text-[10px] text-center mt-3 font-semibold tracking-wide">FBS Warehouse</div>
+          <div className="text-white/30 text-[10px] mt-2.5 flex items-center gap-1.5">
+            <div className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
+            Main Warehouse Athens, GR
+          </div>
         </div>
       </aside>
 
