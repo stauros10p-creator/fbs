@@ -1,12 +1,14 @@
+import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, Truck, Users, BarChart2, CalendarDays,
   ShieldCheck, FileBarChart, Bell, Cpu, Settings,
+  Package, ChevronDown, ChevronRight,
 } from 'lucide-react'
 
-const NAV = [
+const OUTBOUND_NAV = [
   { to: '/dashboard',       Icon: LayoutDashboard, label: 'Dashboard'    },
   { to: '/ops',             Icon: Truck,           label: 'Operations'   },
   { to: '/team',            Icon: Users,           label: 'Employees'    },
@@ -18,6 +20,74 @@ const NAV = [
   { to: '/copilot',         Icon: Cpu,             label: 'Algorithms'   },
   { to: '/copilot',         Icon: Settings,        label: 'Settings'     },
 ]
+
+const INBOUND_NAV: { to: string; Icon: any; label: string; badge?: boolean }[] = [
+  // θα προστεθούν σύντομα
+]
+
+function NavSection({
+  title,
+  icon: Icon,
+  items,
+  unacked,
+  defaultOpen = true,
+}: {
+  title: string
+  icon: any
+  items: typeof OUTBOUND_NAV
+  unacked: number
+  defaultOpen?: boolean
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+
+  return (
+    <div>
+      {/* Section header */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-2 px-3 py-2 text-white/40 hover:text-white/70 transition-colors"
+      >
+        <Icon className="w-3.5 h-3.5 flex-shrink-0" />
+        <span className="flex-1 text-left text-[10px] font-bold tracking-widest uppercase">{title}</span>
+        {open
+          ? <ChevronDown className="w-3 h-3" />
+          : <ChevronRight className="w-3 h-3" />
+        }
+      </button>
+
+      {/* Nav items */}
+      {open && (
+        <div className="space-y-0.5 mb-2">
+          {items.length === 0 ? (
+            <div className="px-3 py-2 text-white/25 text-xs italic">Σύντομα...</div>
+          ) : (
+            items.map(({ to, Icon: ItemIcon, label, badge }, i) => (
+              <NavLink
+                key={`${to}-${i}`}
+                to={to}
+                end={to === '/dashboard'}
+                className={({ isActive }) => cn(
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ml-1',
+                  isActive
+                    ? 'bg-blue-600 text-white'
+                    : 'text-white/55 hover:bg-white/8 hover:text-white/90',
+                )}
+              >
+                <ItemIcon className="w-4 h-4 flex-shrink-0" />
+                <span className="flex-1">{label}</span>
+                {badge && unacked > 0 && (
+                  <span className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                    {unacked}
+                  </span>
+                )}
+              </NavLink>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const alerts  = useAppStore(s => s.alerts)
@@ -43,28 +113,24 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
-          {NAV.map(({ to, Icon, label, badge }, i) => (
-            <NavLink
-              key={`${to}-${i}`}
-              to={to}
-              end={to === '/dashboard'}
-              className={({ isActive }) => cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all',
-                isActive
-                  ? 'bg-blue-600 text-white'
-                  : 'text-white/55 hover:bg-white/8 hover:text-white/90',
-              )}
-            >
-              <Icon className="w-4 h-4 flex-shrink-0" />
-              <span className="flex-1">{label}</span>
-              {badge && unacked > 0 && (
-                <span className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
-                  {unacked}
-                </span>
-              )}
-            </NavLink>
-          ))}
+        <nav className="flex-1 py-3 px-2 space-y-1 overflow-y-auto">
+          <NavSection
+            title="Outbound"
+            icon={Package}
+            items={OUTBOUND_NAV}
+            unacked={unacked}
+            defaultOpen={true}
+          />
+
+          <div className="border-t border-white/10 my-1" />
+
+          <NavSection
+            title="Inbound"
+            icon={Truck}
+            items={INBOUND_NAV}
+            unacked={unacked}
+            defaultOpen={true}
+          />
         </nav>
 
         {/* User */}
