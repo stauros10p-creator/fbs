@@ -16,12 +16,12 @@
 }
 
 @layer components {
-  .btn-primary { @apply bg-blue text-white font-semibold text-xs px-4 py-2 rounded-lg transition-all hover:brightness-110 active:scale-95; }
+  .btn-primary { @apply bg-blue-600 text-white font-semibold text-xs px-4 py-2 rounded-lg transition-all hover:brightness-110 active:scale-95; }
   .btn-secondary { @apply bg-white border border-slate-200 text-slate-600 text-xs font-medium px-4 py-2 rounded-lg transition-all hover:bg-slate-50; }
-  .btn-danger { @apply bg-red/10 border border-red/30 text-red text-xs font-medium px-4 py-2 rounded-lg; }
+  .btn-danger { @apply bg-red-500/10 border border-red-500/30 text-red-500 text-xs font-medium px-4 py-2 rounded-lg; }
   .card { @apply bg-white border border-slate-200 rounded-xl shadow-sm; }
   .panel { @apply bg-white border border-slate-200 rounded-xl shadow-sm p-4; }
-  .input { @apply bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue/50 focus:ring-1 focus:ring-blue/20 transition-colors w-full; }
+  .input { @apply bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 transition-colors w-full; }
   .label { @apply text-xs font-semibold tracking-wide text-slate-400 uppercase; }
   .mono { font-family: 'JetBrains Mono', monospace; }
 }
