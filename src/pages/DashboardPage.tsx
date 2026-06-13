@@ -12,7 +12,7 @@ import {
 import { useState } from 'react'
 import {
   addDays, toKey, getForDay, staffForOrders, workHours, slaScore,
-  HOURLY_DIST, UNITS_PER_ORDER, FORECAST,
+  UNITS_PER_ORDER, FORECAST, getHourlyChartData,
 } from '@/lib/forecast'
 
 // ── Derive "yesterday" data from forecast engine ──────────────────────────────
@@ -34,13 +34,8 @@ const prevData  = getForDay(prevKey)
 const pctDelta  = (a: number, b: number) =>
   b > 0 ? ((a - b) / b * 100).toFixed(1) + '%' : '—'
 
-// Hourly chart data
-const HOURLY_DATA = HOURLY_DIST.map(h => ({
-  t:      h.hour,
-  orders: Math.round(yData.total * h.recv),
-  units:  Math.round(yUnits      * h.comp),
-  labor:  Math.round(yHours * 60 * h.recv), // minutes as proxy
-}))
+// Hourly chart data — real distributions from throughput reports
+const HOURLY_DATA = getHourlyChartData(yKey)
 
 // SLA donut
 const slaOnTime  = Math.round(yData.total * (ySLA / 100))
@@ -260,8 +255,8 @@ export function DashboardPage() {
                 <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12 }} />
                 <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-                <Line type="monotone" dataKey="orders" name="Παραγγελίες" stroke="#3b82f6" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="units"  name="Μονάδες"    stroke="#22c55e" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="downloaded" name="Εισερχόμενες" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="packed"     name="Packed"        stroke="#22c55e" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
