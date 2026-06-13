@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useAppStore } from '@/store'
 import { Link } from 'react-router-dom'
 import {
@@ -10,31 +9,57 @@ import {
   ShoppingCart, Package, Clock, ShieldCheck, Users,
   ArrowUpRight, CalendarDays, ClipboardList, UserMinus, BarChart2, TrendingUp,
 } from 'lucide-react'
+import { useState } from 'react'
+import {
+  addDays, toKey, getForDay, staffForOrders, workHours, slaScore,
+  HOURLY_DIST, UNITS_PER_ORDER, FORECAST,
+} from '@/lib/forecast'
 
-// ── Mock "yesterday" data ─────────────────────────────────────────────────────
-const HOURLY_DATA = [
-  { t: '00:00', orders: 120,  units: 890,  labor: 240 },
-  { t: '04:00', orders: 280,  units: 1080, labor: 380 },
-  { t: '08:00', orders: 680,  units: 1320, labor: 520 },
-  { t: '12:00', orders: 1180, units: 1450, labor: 680 },
-  { t: '16:00', orders: 1240, units: 1380, labor: 720 },
-  { t: '20:00', orders: 980,  units: 1100, labor: 580 },
-  { t: '24:00', orders: 420,  units: 760,  labor: 320 },
-]
+// ── Derive "yesterday" data from forecast engine ──────────────────────────────
+const today     = new Date()
+const yesterday = addDays(today, -1)
+const yKey      = toKey(yesterday)
+const yData     = getForDay(yKey)
+const yMonth    = yesterday.getMonth() + 1
 
+const yStaff    = staffForOrders(yData.total, yKey)
+const yHours    = workHours(yData.total, yMonth)
+const ySLA      = slaScore(yData.total, yKey)
+const yUnits    = Math.round(yData.total * UNITS_PER_ORDER)
+const yActive   = Object.values(yStaff).reduce((a, b) => a + b, 0)
+
+// Previous day for delta
+const prevKey   = toKey(addDays(yesterday, -1))
+const prevData  = getForDay(prevKey)
+const pctDelta  = (a: number, b: number) =>
+  b > 0 ? ((a - b) / b * 100).toFixed(1) + '%' : '—'
+
+// Hourly chart data
+const HOURLY_DATA = HOURLY_DIST.map(h => ({
+  t:      h.hour,
+  orders: Math.round(yData.total * h.recv),
+  units:  Math.round(yUnits      * h.comp),
+  labor:  Math.round(yHours * 60 * h.recv), // minutes as proxy
+}))
+
+// SLA donut
+const slaOnTime  = Math.round(yData.total * (ySLA / 100))
+const slaDelayed = Math.round(yData.total * 0.03)
+const slaFailed  = yData.total - slaOnTime - slaDelayed
 const SLA_DATA = [
-  { name: 'On Time', value: 12344, color: '#22c55e' },
-  { name: 'Delayed', value: 356,   color: '#f59e0b' },
-  { name: 'Failed',  value: 142,   color: '#ef4444' },
+  { name: 'On Time',  value: Math.max(0, slaOnTime),  color: '#22c55e' },
+  { name: 'Delayed',  value: Math.max(0, slaDelayed), color: '#f59e0b' },
+  { name: 'Failed',   value: Math.max(0, slaFailed),  color: '#ef4444' },
 ]
 
+// Yesterday Orders table
 const YESTERDAY_ORDERS = [
-  { type: 'Due Date (έως 19:00)',  color: '#3b82f6', orders: 7842,  units: 58210, pct: 60.9 },
-  { type: 'Same Day (έως 13:00)',  color: '#22c55e', orders: 2856,  units: 21340, pct: 22.2 },
-  { type: 'Intra Day (έως 00:00)', color: '#f59e0b', orders: 1645,  units: 12345, pct: 12.8 },
-  { type: 'Ογκώδεις Παραγγελίες', color: '#f97316', orders: 499,   units: 4319,  pct: 4.1  },
-]
+  { type: 'Due Date (έως 19:00)',  color: '#3b82f6', orders: yData.due_date,            units: Math.round(yData.due_date  * UNITS_PER_ORDER) },
+  { type: 'Intraday (έως 00:00)', color: '#8b5cf6', orders: yData.intraday,             units: Math.round(yData.intraday  * UNITS_PER_ORDER) },
+  { type: 'Σύνολο',               color: '#1e293b', orders: yData.total,                units: yUnits },
+].filter(r => r.orders > 0)
 
+// Top performers — still mock (no Supabase yet)
 const TOP_PERFORMERS = [
   { rank: 1, name: 'Maria Papadopoulou', role: 'Picker', units: 1250, medal: '🥇' },
   { rank: 2, name: 'Giorgos Ioannou',    role: 'Packer', units: 1180, medal: '🥈' },
@@ -43,18 +68,33 @@ const TOP_PERFORMERS = [
   { rank: 5, name: 'Kostas Angelou',     role: 'Packer', units: 910,  medal: ''   },
 ]
 
-// ── Mini calendar ─────────────────────────────────────────────────────────────
+// ── Mini Calendar ─────────────────────────────────────────────────────────────
 const MONTH_EL = ['Ιανουάριος','Φεβρουάριος','Μάρτιος','Απρίλιος','Μάιος','Ιούνιος','Ιούλιος','Αύγουστος','Σεπτέμβριος','Οκτώβριος','Νοέμβριος','Δεκέμβριος']
 const DAYS_EL  = ['Δευ','Τρι','Τετ','Πεμ','Παρ','Σαβ','Κυρ']
-const BUSY_DAYS = [3, 10, 18, 24]
-const DIFFICULT_DAY = 30
+
+function getDifficultDays(year: number, month: number) {
+  // Days with forecast > 16.000 orders
+  const result: { day: number; type: 'busy' | 'peak' }[] = []
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    const data = FORECAST[key]
+    if (!data) continue
+    if (data.total > 20000) result.push({ day: d, type: 'peak' })
+    else if (data.total > 14000) result.push({ day: d, type: 'busy' })
+  }
+  return result
+}
 
 function MiniCalendar({ year, month }: { year: number; month: number }) {
   const firstDay = new Date(year, month, 1).getDay()
   const offset   = firstDay === 0 ? 6 : firstDay - 1
   const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const today = new Date()
-  const isToday = (d: number) => today.getFullYear() === year && today.getMonth() === month && today.getDate() === d
+  const specialDays = getDifficultDays(year, month)
+  const todayDate = new Date()
+  const isToday = (d: number) =>
+    todayDate.getFullYear() === year && todayDate.getMonth() === month && todayDate.getDate() === d
+
   const cells: (number | null)[] = [
     ...Array(offset).fill(null),
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
@@ -68,20 +108,18 @@ function MiniCalendar({ year, month }: { year: number; month: number }) {
       ))}
       {cells.map((d, i) => {
         if (!d) return <div key={i} />
-        const isT    = isToday(d)
-        const isBusy = BUSY_DAYS.includes(d)
-        const isDiff = d === DIFFICULT_DAY
+        const isT   = isToday(d)
+        const sp    = specialDays.find(s => s.day === d)
+        const isPeak = sp?.type === 'peak'
+        const isBusy = sp?.type === 'busy'
         return (
-          <div
-            key={i}
-            className={[
-              'w-7 h-7 mx-auto flex items-center justify-center rounded-full text-xs font-medium cursor-pointer transition-colors',
-              isDiff ? 'bg-red-500 text-white' : '',
-              isT && !isDiff ? 'bg-blue-600 text-white' : '',
-              isBusy && !isT && !isDiff ? 'bg-blue-50 text-blue-600 font-semibold' : '',
-              !isT && !isBusy && !isDiff ? 'text-slate-600 hover:bg-slate-100' : '',
-            ].join(' ')}
-          >
+          <div key={i} className={[
+            'w-7 h-7 mx-auto flex items-center justify-center rounded-full text-xs font-medium cursor-pointer transition-colors',
+            isPeak  ? 'bg-red-500 text-white' : '',
+            isT && !isPeak ? 'bg-blue-600 text-white' : '',
+            isBusy && !isT ? 'bg-amber-100 text-amber-700 font-semibold' : '',
+            !isT && !sp ? 'text-slate-600 hover:bg-slate-100' : '',
+          ].join(' ')}>
             {d}
           </div>
         )
@@ -90,19 +128,24 @@ function MiniCalendar({ year, month }: { year: number; month: number }) {
   )
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+// ── Main component ─────────────────────────────────────────────────────────────
 export function DashboardPage() {
-  const employees = useAppStore(s => s.employees)
   const alerts    = useAppStore(s => s.alerts)
-
-  const [calYear,  setCalYear]  = useState(2026)
-  const [calMonth, setCalMonth] = useState(5)
-
-  const activeEmployees = employees.filter(e =>
-    e.current_status === 'working' || e.current_status === 'redeployed'
-  ).length || 128
+  const [calYear,  setCalYear]  = useState(today.getFullYear())
+  const [calMonth, setCalMonth] = useState(today.getMonth())
 
   const unacked = alerts.filter(a => !a.acknowledged_at).length
+
+  // Next difficult day (forecast > 14.000)
+  const nextDifficult = (() => {
+    for (let i = 1; i <= 30; i++) {
+      const d   = addDays(today, i)
+      const key = toKey(d)
+      const fc  = FORECAST[key]
+      if (fc && fc.total > 16000) return { d, orders: fc.total }
+    }
+    return null
+  })()
 
   const prevMonth = () => {
     if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1) }
@@ -116,16 +159,18 @@ export function DashboardPage() {
   return (
     <div className="flex flex-col h-full overflow-hidden bg-slate-50">
 
-      {/* ── HEADER ── */}
+      {/* HEADER */}
       <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
         <div>
           <h1 className="text-xl font-bold text-slate-800">Welcome back, Stavros! 👋</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Here's what's happening in your warehouse today.</p>
+          <p className="text-sm text-slate-500 mt-0.5">
+            {today.toLocaleDateString('el-GR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <button className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 transition-colors">
             <CalendarDays className="w-4 h-4 text-slate-400" />
-            1 Ιουνίου 2026
+            {yesterday.toLocaleDateString('el-GR', { day: 'numeric', month: 'long' })}
           </button>
           <button className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 transition-colors">
             All Shifts
@@ -135,25 +180,53 @@ export function DashboardPage() {
             <button className="w-9 h-9 flex items-center justify-center border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
               <Bell className="w-4 h-4 text-slate-600" />
             </button>
-            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-              {unacked > 0 ? unacked : 3}
-            </span>
+            {unacked > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                {unacked}
+              </span>
+            )}
           </div>
         </div>
       </div>
 
-      {/* ── SCROLLABLE CONTENT ── */}
+      {/* CONTENT */}
       <div className="flex-1 overflow-y-auto p-6 space-y-5">
 
         {/* KPI ROW */}
         <div className="grid grid-cols-5 gap-4">
-          {([
-            { Icon: ShoppingCart, label: 'Total Orders',     value: '12,842',                delta: '18.6%', color: 'text-blue-600',    bg: 'bg-blue-50'    },
-            { Icon: Package,      label: 'Units Processed',  value: '96,214',                delta: '21.3%', color: 'text-green-600',   bg: 'bg-green-50'   },
-            { Icon: Clock,        label: 'Labor Hours',       value: '1,245h',                delta: '17.8%', color: 'text-purple-600',  bg: 'bg-purple-50'  },
-            { Icon: ShieldCheck,  label: 'SLA Success',       value: '96.2%',                 delta: '2.1pp', color: 'text-emerald-600', bg: 'bg-emerald-50' },
-            { Icon: Users,        label: 'Active Employees',  value: String(activeEmployees), delta: '5',     color: 'text-orange-600',  bg: 'bg-orange-50'  },
-          ] as const).map(({ Icon, label, value, delta, color, bg }) => (
+          {[
+            {
+              Icon: ShoppingCart, label: 'Total Orders',
+              value: yData.total.toLocaleString('el-GR'),
+              delta: pctDelta(yData.total, prevData.total),
+              color: 'text-blue-600', bg: 'bg-blue-50',
+            },
+            {
+              Icon: Package, label: 'Units Processed',
+              value: yUnits.toLocaleString('el-GR'),
+              delta: pctDelta(yUnits, Math.round(prevData.total * UNITS_PER_ORDER)),
+              color: 'text-green-600', bg: 'bg-green-50',
+            },
+            {
+              Icon: Clock, label: 'Labor Hours',
+              value: `${yHours}h`,
+              delta: pctDelta(yHours, workHours(prevData.total, yMonth)),
+              color: 'text-purple-600', bg: 'bg-purple-50',
+            },
+            {
+              Icon: ShieldCheck, label: 'SLA Success',
+              value: `${ySLA}%`,
+              delta: `${ySLA >= 95 ? '✓ Εντός' : '⚠ Οριακά'}`,
+              color: ySLA >= 95 ? 'text-emerald-600' : 'text-amber-600',
+              bg:    ySLA >= 95 ? 'bg-emerald-50'    : 'bg-amber-50',
+            },
+            {
+              Icon: Users, label: 'Active Employees',
+              value: String(yActive),
+              delta: 'σήμερα στη βάρδια',
+              color: 'text-orange-600', bg: 'bg-orange-50',
+            },
+          ].map(({ Icon, label, value, delta, color, bg }) => (
             <div key={label} className="bg-white rounded-xl border border-slate-200 p-4 flex items-start gap-3">
               <div className={`w-10 h-10 rounded-lg ${bg} flex items-center justify-center flex-shrink-0`}>
                 <Icon className={`w-5 h-5 ${color}`} />
@@ -163,8 +236,7 @@ export function DashboardPage() {
                 <div className={`text-2xl font-bold mt-0.5 ${color}`}>{value}</div>
                 <div className="flex items-center gap-1 mt-0.5">
                   <ArrowUpRight className="w-3 h-3 text-green-500" />
-                  <span className="text-xs text-green-600 font-semibold">↑{delta}</span>
-                  <span className="text-xs text-slate-400">vs yesterday</span>
+                  <span className="text-xs text-slate-500">{delta}</span>
                 </div>
               </div>
             </div>
@@ -176,16 +248,20 @@ export function DashboardPage() {
 
           {/* Yesterday Overview */}
           <div className="col-span-5 bg-white rounded-xl border border-slate-200 p-5">
-            <h3 className="text-sm font-semibold text-slate-800 mb-4">Yesterday Overview</h3>
+            <h3 className="text-sm font-semibold text-slate-800 mb-1">
+              Yesterday Overview
+              <span className="ml-2 text-xs text-slate-400 font-normal">
+                {yesterday.toLocaleDateString('el-GR', { weekday: 'long', day: 'numeric', month: 'short' })}
+              </span>
+            </h3>
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={HOURLY_DATA} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
                 <XAxis dataKey="t" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} domain={[0, 1500]} />
+                <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12 }} />
                 <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-                <Line type="monotone" dataKey="orders" name="Orders"      stroke="#3b82f6" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="units"  name="Units"       stroke="#22c55e" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="labor"  name="Labor Hours" stroke="#a78bfa" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="orders" name="Παραγγελίες" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="units"  name="Μονάδες"    stroke="#22c55e" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -201,8 +277,8 @@ export function DashboardPage() {
                 </Pie>
               </PieChart>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <div className="text-xl font-bold text-slate-800">96.2%</div>
-                <div className="text-[10px] text-slate-400">SLA Success</div>
+                <div className={`text-xl font-bold ${ySLA >= 95 ? 'text-emerald-700' : 'text-amber-600'}`}>{ySLA}%</div>
+                <div className="text-[10px] text-slate-400">SLA Χθες</div>
               </div>
             </div>
             <div className="mt-3 space-y-2">
@@ -212,12 +288,12 @@ export function DashboardPage() {
                     <div className="w-2 h-2 rounded-full" style={{ background: color }} />
                     <span className="text-slate-600">{name}</span>
                   </div>
-                  <span className="font-semibold text-slate-800">{value.toLocaleString()}</span>
+                  <span className="font-semibold text-slate-800">{value.toLocaleString('el-GR')}</span>
                 </div>
               ))}
             </div>
-            <Link to="/schedule" className="mt-3 block text-center text-xs text-blue-600 font-medium hover:underline">
-              View SLA Monitor →
+            <Link to="/forecast" className="mt-3 block text-center text-xs text-blue-600 font-medium hover:underline">
+              Forecast →
             </Link>
           </div>
 
@@ -225,7 +301,7 @@ export function DashboardPage() {
           <div className="col-span-4 bg-white rounded-xl border border-slate-200 p-5">
             <div className="flex items-center justify-between mb-1">
               <h3 className="text-sm font-semibold text-slate-800">
-                Ημερολόγιο ({MONTH_EL[calMonth]} {calYear})
+                {MONTH_EL[calMonth]} {calYear}
               </h3>
               <div className="flex items-center gap-1">
                 <button onClick={prevMonth} className="w-6 h-6 flex items-center justify-center rounded hover:bg-slate-100 transition-colors">
@@ -237,14 +313,20 @@ export function DashboardPage() {
               </div>
             </div>
             <MiniCalendar year={calYear} month={calMonth} />
-            <div className="mt-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg flex gap-2">
-              <span className="text-amber-500 text-sm flex-shrink-0 mt-0.5">⚠</span>
-              <div>
-                <div className="text-xs font-semibold text-amber-800">Επόμενη δύσκολη μέρα</div>
-                <div className="text-xs text-amber-700 font-medium">Τρίτη 30 Ιουνίου 2026</div>
-                <div className="text-xs text-amber-600 mt-0.5">Αναμενόμενος υψηλός όγκος παραγγελιών +28% από τον μέσο όρο</div>
+            {nextDifficult && (
+              <div className="mt-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg flex gap-2">
+                <span className="text-amber-500 text-sm flex-shrink-0 mt-0.5">⚠</span>
+                <div>
+                  <div className="text-xs font-semibold text-amber-800">Επόμενη δύσκολη μέρα</div>
+                  <div className="text-xs text-amber-700 font-medium">
+                    {nextDifficult.d.toLocaleDateString('el-GR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                  </div>
+                  <div className="text-xs text-amber-600 mt-0.5">
+                    ~{nextDifficult.orders.toLocaleString('el-GR')} αναμενόμενες παραγγελίες
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
@@ -255,52 +337,49 @@ export function DashboardPage() {
           <div className="col-span-4 bg-white rounded-xl border border-slate-200 overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-100">
               <h3 className="text-sm font-semibold text-slate-800">Yesterday Orders</h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {yesterday.toLocaleDateString('el-GR', { weekday: 'long', day: 'numeric', month: 'long' })}
+              </p>
             </div>
             <table className="w-full text-xs">
               <thead className="bg-slate-50 border-b border-slate-100">
                 <tr>
                   <th className="text-left px-4 py-2.5 text-slate-500 font-medium">Κατηγορία</th>
                   <th className="text-right px-3 py-2.5 text-slate-500 font-medium">Παραγγελίες</th>
-                  <th className="text-right px-3 py-2.5 text-slate-500 font-medium">Μονάδες</th>
-                  <th className="text-right px-4 py-2.5 text-slate-500 font-medium">%</th>
+                  <th className="text-right px-4 py-2.5 text-slate-500 font-medium">Μονάδες</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {YESTERDAY_ORDERS.map(row => (
-                  <tr key={row.type} className="hover:bg-slate-50 transition-colors">
+                  <tr key={row.type} className={`hover:bg-slate-50 transition-colors ${row.type === 'Σύνολο' ? 'bg-slate-50 font-semibold border-t border-slate-200' : ''}`}>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: row.color }} />
+                        {row.type !== 'Σύνολο' && <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: row.color }} />}
                         <span className="text-slate-700 leading-tight">{row.type}</span>
                       </div>
                     </td>
-                    <td className="px-3 py-3 text-right font-mono font-semibold text-slate-800">{row.orders.toLocaleString()}</td>
-                    <td className="px-3 py-3 text-right font-mono text-slate-600">{row.units.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-blue-600">{row.pct}%</td>
+                    <td className="px-3 py-3 text-right font-mono font-semibold text-slate-800">{row.orders.toLocaleString('el-GR')}</td>
+                    <td className="px-4 py-3 text-right font-mono text-slate-600">{row.units.toLocaleString('el-GR')}</td>
                   </tr>
                 ))}
-                <tr className="bg-slate-50 border-t border-slate-200">
-                  <td className="px-4 py-3 font-semibold text-slate-800">Σύνολο</td>
-                  <td className="px-3 py-3 text-right font-mono font-bold text-slate-800">12,842</td>
-                  <td className="px-3 py-3 text-right font-mono font-bold text-slate-800">96,214</td>
-                  <td className="px-4 py-3 text-right font-bold text-slate-800">100%</td>
-                </tr>
               </tbody>
             </table>
           </div>
 
           {/* Labor Utilization */}
           <div className="col-span-3 bg-white rounded-xl border border-slate-200 p-5">
-            <h3 className="text-sm font-semibold text-slate-800 mb-4">Labor Utilization (Yesterday)</h3>
+            <h3 className="text-sm font-semibold text-slate-800 mb-4">Labor Utilization</h3>
             <div className="text-center mb-5">
-              <div className="text-4xl font-bold text-slate-800">92%</div>
+              <div className="text-4xl font-bold text-slate-800">
+                {Math.min(100, Math.round((yHours / (yActive * 8)) * 100))}%
+              </div>
               <div className="text-sm text-slate-500 mt-1">Utilization Rate</div>
             </div>
             <div className="grid grid-cols-3 gap-2 mb-4 text-center">
               {[
-                { label: 'Working', value: '1,145h', color: 'text-green-600' },
-                { label: 'Idle',    value: '100h',   color: 'text-yellow-500' },
-                { label: 'Break',   value: '68h',    color: 'text-purple-600' },
+                { label: 'Working',     value: `${yHours}h`,    color: 'text-green-600'  },
+                { label: 'Staff',       value: `${yActive}`,    color: 'text-blue-600'   },
+                { label: 'UPH target',  value: '200',           color: 'text-purple-600' },
               ].map(({ label, value, color }) => (
                 <div key={label}>
                   <div className="text-[10px] text-slate-400 mb-0.5">{label}</div>
@@ -309,21 +388,23 @@ export function DashboardPage() {
               ))}
             </div>
             <div className="h-2.5 rounded-full overflow-hidden flex">
-              <div className="bg-green-500" style={{ width: '84%' }} />
-              <div className="bg-yellow-400" style={{ width: '8%' }} />
-              <div className="bg-purple-400" style={{ width: '5%' }} />
+              <div className="bg-green-500" style={{ width: `${Math.min(92, Math.round((yHours / (yActive * 8)) * 100))}%` }} />
+              <div className="bg-yellow-400" style={{ width: '5%' }} />
               <div className="bg-slate-200 flex-1" />
             </div>
-            <Link to="/team" className="mt-4 block text-center text-xs text-blue-600 font-medium hover:underline">
-              View Labor Planning →
+            <Link to="/staff-plan" className="mt-4 block text-center text-xs text-blue-600 font-medium hover:underline">
+              Πλάνο Προσωπικού →
             </Link>
           </div>
 
           {/* Top Performers */}
           <div className="col-span-5 bg-white rounded-xl border border-slate-200 overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-800">Top Performers Yesterday</h3>
-              <Link to="/team" className="text-xs text-blue-600 font-medium hover:underline">View all</Link>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-800">Top Performers</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Mock data — σύντομα από Supabase</p>
+              </div>
+              <Link to="/team" className="text-xs text-blue-600 font-medium hover:underline">Όλοι →</Link>
             </div>
             <div className="divide-y divide-slate-50">
               {TOP_PERFORMERS.map(({ rank, name, role, units, medal }) => (
@@ -339,7 +420,7 @@ export function DashboardPage() {
                   </div>
                   <span className="text-xs text-slate-500 w-14 text-center flex-shrink-0">{role}</span>
                   <span className="text-sm font-bold text-slate-800 font-mono w-24 text-right flex-shrink-0">
-                    {units.toLocaleString()} units
+                    {units.toLocaleString('el-GR')} u
                   </span>
                 </div>
               ))}
@@ -357,19 +438,21 @@ export function DashboardPage() {
                 <TrendingUp className="w-4 h-4 text-white" />
               </div>
               <div className="flex-1">
-                <div className="text-xs text-slate-500 font-medium mb-1">AI Recommendation</div>
+                <div className="text-xs text-slate-500 font-medium mb-1">AI Recommendation · Σήμερα</div>
                 <div className="text-sm font-bold text-blue-600 mb-2">
-                  Αύξησε την ομάδα packing κατά 3 άτομα στο 2ο μισό της βάρδιας
+                  {ySLA < 95
+                    ? 'Ενίσχυσε την ομάδα — το χθεσινό SLA ήταν κάτω από τον στόχο'
+                    : 'Το χθεσινό SLA ήταν εντός στόχου — διατήρησε την τρέχουσα στελέχωση'}
                 </div>
                 <div className="text-xs text-slate-600 leading-relaxed mb-4">
-                  Με βάση τον όγκο παραγγελιών και την απόδοση, προτείνουμε ενίσχυση στην ομάδα packing για αποφυγή καθυστερήσεων.
+                  {`Χθες: ${yData.total.toLocaleString('el-GR')} παραγγελίες · ${yActive} άτομα · SLA ${ySLA}% · ${yHours}h εργασίας.`}
                 </div>
                 <div className="flex items-center gap-3">
                   <button className="bg-blue-600 text-white text-xs font-semibold px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
                     Εφαρμογή Πρότασης
                   </button>
-                  <Link to="/copilot" className="text-xs text-blue-600 font-medium hover:underline">
-                    Δες όλες τις προτάσεις →
+                  <Link to="/forecast" className="text-xs text-blue-600 font-medium hover:underline">
+                    Δες Forecast →
                   </Link>
                 </div>
               </div>
@@ -381,10 +464,10 @@ export function DashboardPage() {
             <h3 className="text-sm font-semibold text-slate-800 mb-4">Quick Actions</h3>
             <div className="grid grid-cols-4 gap-3">
               {[
-                { Icon: ClipboardList, label: 'Δημιουργία Πλάνου',       to: '/staff-plan',      color: 'text-blue-600',   bg: 'bg-blue-50'   },
-                { Icon: Users,         label: 'Ανακατανομή Προσωπικού',  to: '/team',            color: 'text-green-600',  bg: 'bg-green-50'  },
-                { Icon: UserMinus,     label: 'Δηλώσεις Απουσιών',       to: '/team',            color: 'text-orange-600', bg: 'bg-orange-50' },
-                { Icon: BarChart2,     label: 'Αναφορές',                 to: '/hourly-forecast', color: 'text-purple-600', bg: 'bg-purple-50' },
+                { Icon: ClipboardList, label: 'Πλάνο Προσωπικού', to: '/staff-plan',      color: 'text-blue-600',   bg: 'bg-blue-50'   },
+                { Icon: Users,         label: 'Ομάδα',             to: '/team',            color: 'text-green-600',  bg: 'bg-green-50'  },
+                { Icon: UserMinus,     label: 'Απουσίες',          to: '/team',            color: 'text-orange-600', bg: 'bg-orange-50' },
+                { Icon: BarChart2,     label: 'Αναφορές',          to: '/hourly-forecast', color: 'text-purple-600', bg: 'bg-purple-50' },
               ].map(({ Icon, label, to, color, bg }) => (
                 <Link key={label} to={to} className="flex flex-col items-center gap-2 p-4 rounded-xl border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all text-center">
                   <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center`}>
