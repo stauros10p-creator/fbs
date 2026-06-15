@@ -392,6 +392,44 @@ export function useAcknowledgeAlert() {
   })
 }
 
+// ---- Week Shifts ----
+export function useWeekShifts() {
+  const now = new Date()
+  const day = now.getDay()
+  const monday = new Date(now)
+  monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1))
+  monday.setHours(0, 0, 0, 0)
+  const weekDates = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
+    return d.toISOString().slice(0, 10)
+  })
+  const weekStart = weekDates[0]
+  const weekEnd   = weekDates[6]
+
+  return useQuery({
+    queryKey: ['week-shifts', WAREHOUSE_ID, weekStart],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('shifts')
+        .select('*')
+        .eq('warehouse_id', WAREHOUSE_ID)
+        .gte('shift_date', weekStart)
+        .lte('shift_date', weekEnd)
+      if (error) throw error
+      // Build map: employee_id → [Mon…Sun] (Shift | null)
+      const byEmp: Record<string, (Shift | null)[]> = {}
+      ;(data as Shift[]).forEach(shift => {
+        const idx = weekDates.indexOf(shift.shift_date)
+        if (idx === -1) return
+        if (!byEmp[shift.employee_id]) byEmp[shift.employee_id] = Array(7).fill(null)
+        byEmp[shift.employee_id][idx] = shift
+      })
+      return byEmp
+    },
+  })
+}
+
 // ---- Shifts ----
 export function useShifts(date?: string) {
   const targetDate = date ?? new Date().toISOString().split('T')[0]
@@ -501,73 +539,3 @@ Never be vague. If you suggest a reallocation, name the specific employees and r
           session_id: sessionId,
           role: 'user',
           content: messages[messages.length - 1].content,
-          context_snapshot: context,
-        },
-        {
-          warehouse_id: WAREHOUSE_ID,
-          session_id: sessionId,
-          role: 'assistant',
-          content: assistantMessage,
-        },
-      ])
-
-      return assistantMessage
-    },
-  })
-}
-
-// ---- Employee Shifts (by employee) ----
-export function useEmployeeShifts(employeeId: string | undefined, limit = 30) {
-  return useQuery({
-    queryKey: ['employee-shifts', employeeId, limit],
-    enabled: !!employeeId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('shifts')
-        .select('*')
-        .eq('employee_id', employeeId!)
-        .order('shift_date', { ascending: false })
-        .limit(limit)
-      if (error) throw error
-      return data as Shift[]
-    },
-  })
-}
-
-// ---- Apply Reallocation ----
-export function useApplyReallocation() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async ({
-      employee_id,
-      from_role,
-      to_role,
-    }: {
-      employee_id: string
-      from_role: EmployeeRole
-      to_role: EmployeeRole
-    }) => {
-      const { error } = await supabase.from('workforce_allocations').insert({
-        employee_id,
-        warehouse_id: WAREHOUSE_ID,
-        allocated_role: to_role,
-        triggered_by: 'algorithm',
-        reason: `Redeployed from ${from_role} to ${to_role} by algorithm`,
-      })
-      if (error) throw error
-
-      await supabase
-        .from('employees')
-        .update({
-          current_status: 'redeployed',
-          primary_role: to_role,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', employee_id)
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['employees'] })
-    },
-  })
-}

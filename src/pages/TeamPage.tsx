@@ -1,9 +1,12 @@
 import { useState, useMemo } from 'react'
 import {
   Search, Plus, Coffee, UserX, X, TrendingUp, TrendingDown,
-  Minus, Edit2, AlertTriangle,
+  Minus, Edit2, AlertTriangle, Upload,
 } from 'lucide-react'
-import { WEEKLY_SCHEDULE, SCHEDULE_DAYS, classifyShift } from '@/lib/schedule'
+import { SCHEDULE_DAYS, classifyShift } from '@/lib/schedule'
+import { useWeekShifts } from '@/hooks'
+import { ScheduleImportModal } from '@/components/team/ScheduleImportModal'
+import type { Shift } from '@/types'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip,
   ResponsiveContainer, ReferenceLine, CartesianGrid,
@@ -89,11 +92,12 @@ function getYesterdayUPH(emp: Employee): number {
 // ── EmployeeDetailPanel ───────────────────────────────────────────────────────
 
 function EmployeeDetailPanel({
-  emp, teamAvgYesterday, teamQ3Avg, onEdit, onClose, onBreak, onSick,
+  emp, teamAvgYesterday, teamQ3Avg, weekShifts, onEdit, onClose, onBreak, onSick,
 }: {
   emp: Employee
   teamAvgYesterday: number
   teamQ3Avg: number
+  weekShifts: Record<string, (Shift | null)[]> | undefined
   onEdit: () => void
   onClose: () => void
   onBreak: () => Promise<void>
@@ -102,7 +106,7 @@ function EmployeeDetailPanel({
   const history    = getProductivityHistory(emp)
   const yUPH       = getYesterdayUPH(emp)
   const benchmark  = getEmpBaseline(emp)
-  const empSchedule = WEEKLY_SCHEDULE[emp.employee_code] ?? null
+  const empShifts  = weekShifts?.[emp.id] ?? null
   const q3Avg      = Math.round(history.reduce((a, b) => a + b.uph, 0) / history.length)
   const diffYest   = Math.round(((yUPH - teamAvgYesterday) / teamAvgYesterday) * 100)
   const diffQ3     = Math.round(((q3Avg - teamQ3Avg) / teamQ3Avg) * 100)
@@ -272,11 +276,15 @@ function EmployeeDetailPanel({
             <div className="text-[10px] font-mono uppercase tracking-widest text-slate-400">Πρόγραμμα Εβδομάδας</div>
             <div className="text-[9px] text-slate-400">15–21 Ιουν</div>
           </div>
-          {empSchedule ? (
+          {empShifts ? (
             <>
               <div className="grid grid-cols-7 gap-1">
                 {SCHEDULE_DAYS.map((day, i) => {
-                  const s = classifyShift(empSchedule[i])
+                  const shift = empShifts[i]
+                  const shiftStr = shift
+                    ? `${shift.start_time.slice(0, 5)}-${shift.end_time.slice(0, 5)}`
+                    : (emp.current_status === 'sick' ? 'sick' : null)
+                  const s = classifyShift(shiftStr)
                   return (
                     <div key={day} className="text-center" title={s.full ?? 'Ρεπό'}>
                       <div className="text-[9px] text-slate-400 mb-1">{day}</div>
@@ -304,7 +312,7 @@ function EmployeeDetailPanel({
               </div>
             </>
           ) : (
-            <div className="text-xs text-slate-400 italic py-2">Δεν υπάρχουν δεδομένα προγράμματος</div>
+            <div className="text-xs text-slate-400 italic py-3 text-center">Δεν έχει γίνει import πρόγραμμα αυτή την εβδομάδα</div>
           )}
         </div>
 
@@ -343,8 +351,11 @@ export function TeamPage() {
   const [search,     setSearch]     = useState('')
   const [roleFilter, setRoleFilter] = useState<EmployeeRole | 'all'>('all')
   const [showModal,  setShowModal]  = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const [editEmp,    setEditEmp]    = useState<Employee | null>(null)
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null)
+
+  const { data: weekShifts } = useWeekShifts()
 
   const updateStatus = useUpdateEmployeeStatus()
   const requestBreak = useRequestBreak()
@@ -402,12 +413,20 @@ export function TeamPage() {
         title="TEAM"
         subtitle={`${employees.length} εργαζόμενοι · ${employees.filter(e => e.current_status === 'working').length} εργάζονται`}
         actions={
-          <button
-            onClick={() => { setEditEmp(null); setShowModal(true) }}
-            className="btn-primary flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" /> Προσθήκη
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowImport(true)}
+              className="btn-secondary flex items-center gap-2"
+            >
+              <Upload className="w-4 h-4" /> Import Πρόγραμμα
+            </button>
+            <button
+              onClick={() => { setEditEmp(null); setShowModal(true) }}
+              className="btn-primary flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" /> Προσθήκη
+            </button>
+          </div>
         }
       />
 
@@ -609,24 +628,4 @@ export function TeamPage() {
           {selectedEmp && (
             <EmployeeDetailPanel
               emp={selectedEmp}
-              teamAvgYesterday={roleAvgYesterday[selectedEmp.primary_role] ?? 100}
-              teamQ3Avg={roleQ3Avg[selectedEmp.primary_role] ?? 100}
-              onEdit={() => { setEditEmp(selectedEmp); setShowModal(true) }}
-              onClose={() => setSelectedEmp(null)}
-              onBreak={async () => { await handleBreak(selectedEmp) }}
-              onSick={async () => { await handleSick(selectedEmp) }}
-            />
-          )}
-        </div>
-      </div>
-
-      {showModal && (
-        <EmployeeModal
-          employee={editEmp}
-          onClose={() => { setShowModal(false); setEditEmp(null) }}
-        />
-      )}
-    </div>
-  )
-}
-                                                                                                                                                                                                                                                                       
+              teamAvgYesterday={roleAvgYes
