@@ -21,7 +21,7 @@ import { useUpdateEmployeeStatus, useRequestBreak } from '@/hooks'
 import { EmployeeModal } from '@/components/team/EmployeeModal'
 import toast from 'react-hot-toast'
 
-// ── Constants ────────────────────────────────────────────────────────────────
+// -- Constants --
 
 const ROLE_BENCHMARK: Record<string, number> = {
   operator: 190, picker: 77, packer: 80, sorter: 150, transporter: 120,
@@ -47,7 +47,7 @@ const STATUS_TABS: { key: 'all' | EmployeeStatus; label: string }[] = [
   { key: 'off',       label: 'Ρεπό' },
 ]
 
-// ── Mock data helpers (seeded by employee id for consistency) ─────────────────
+// -- Mock data helpers --
 
 function seededVal(seed: number, i: number): number {
   return (Math.sin(seed * 9301 + i * 49297 + 233) * 0.5 + 0.5)
@@ -63,7 +63,6 @@ function getEmpBaseline(emp: Employee): number {
     ?? 100
 }
 
-/** 12-week productivity history */
 function getProductivityHistory(emp: Employee) {
   const seed = empSeed(emp)
   const baseline = getEmpBaseline(emp)
@@ -71,7 +70,7 @@ function getProductivityHistory(emp: Employee) {
   return Array.from({ length: 12 }, (_, i) => {
     const d = new Date(now)
     d.setDate(d.getDate() - (11 - i) * 7)
-    const noise = (seededVal(seed, i) - 0.5) * 0.2   // ±10%
+    const noise = (seededVal(seed, i) - 0.5) * 0.2
     return {
       week: `W${i + 1}`,
       label: `${MONTHS_SHORT[d.getMonth()]} ${d.getDate()}`,
@@ -81,7 +80,6 @@ function getProductivityHistory(emp: Employee) {
   })
 }
 
-/** Simulated yesterday UPH */
 function getYesterdayUPH(emp: Employee): number {
   const baseline = getEmpBaseline(emp)
   const noise = (seededVal(empSeed(emp), 99) - 0.5) * 0.2
@@ -89,7 +87,7 @@ function getYesterdayUPH(emp: Employee): number {
 }
 
 
-// ── EmployeeDetailPanel ───────────────────────────────────────────────────────
+// -- EmployeeDetailPanel --
 
 function EmployeeDetailPanel({
   emp, teamAvgYesterday, teamQ3Avg, weekShifts, onEdit, onClose, onBreak, onSick,
@@ -124,7 +122,6 @@ function EmployeeDetailPanel({
 
   return (
     <div className="w-80 flex-shrink-0 bg-white rounded-xl border border-slate-200 flex flex-col overflow-hidden">
-      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 flex-shrink-0">
         <div className="flex items-center gap-3">
           <div
@@ -148,7 +145,6 @@ function EmployeeDetailPanel({
 
       <div className="flex-1 overflow-y-auto p-4 space-y-5">
 
-        {/* Status + Skill */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className={cn('w-2 h-2 rounded-full', cfg?.dot ?? 'bg-slate-300')} />
@@ -161,13 +157,11 @@ function EmployeeDetailPanel({
           </div>
         </div>
 
-        {/* Roles */}
         <div className="flex gap-2 flex-wrap">
           <RoleBadge role={emp.primary_role} />
           {emp.secondary_role && <RoleBadge role={emp.secondary_role} />}
         </div>
 
-        {/* Alert banner */}
         {isAlert && (
           <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
             <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
@@ -175,7 +169,6 @@ function EmployeeDetailPanel({
           </div>
         )}
 
-        {/* Yesterday KPIs */}
         <div>
           <div className="text-[10px] font-mono uppercase tracking-widest text-slate-400 mb-2">Χθεσινή vs Ομάδα</div>
           <div className="grid grid-cols-3 gap-2">
@@ -196,7 +189,6 @@ function EmployeeDetailPanel({
           </div>
         </div>
 
-        {/* Quarterly comparison */}
         <div>
           <div className="text-[10px] font-mono uppercase tracking-widest text-slate-400 mb-2">Τρίμηνο (12 εβδ.)</div>
           <div className="grid grid-cols-3 gap-2">
@@ -217,7 +209,6 @@ function EmployeeDetailPanel({
           </div>
         </div>
 
-        {/* Horizontal bar comparison */}
         <div>
           <div className="text-[10px] font-mono uppercase tracking-widest text-slate-400 mb-2">Σύγκριση χθες</div>
           <div className="space-y-2">
@@ -241,7 +232,6 @@ function EmployeeDetailPanel({
           </div>
         </div>
 
-        {/* 12-week line chart */}
         <div>
           <div className="flex items-center justify-between mb-2">
             <div className="text-[10px] font-mono uppercase tracking-widest text-slate-400">Τάση 12 εβδομάδων</div>
@@ -270,7 +260,6 @@ function EmployeeDetailPanel({
           </ResponsiveContainer>
         </div>
 
-        {/* Weekly schedule */}
         <div>
           <div className="flex items-center justify-between mb-2">
             <div className="text-[10px] font-mono uppercase tracking-widest text-slate-400">Πρόγραμμα Εβδομάδας</div>
@@ -316,7 +305,6 @@ function EmployeeDetailPanel({
           )}
         </div>
 
-        {/* Actions */}
         <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
           <button onClick={onEdit} className="btn-primary text-xs py-2 w-full flex items-center justify-center gap-2">
             <Edit2 className="w-3.5 h-3.5" /> Επεξεργασία Στοιχείων
@@ -343,7 +331,7 @@ function EmployeeDetailPanel({
   )
 }
 
-// ── TeamPage ──────────────────────────────────────────────────────────────────
+// -- TeamPage --
 
 export function TeamPage() {
   const employees = useAppStore(s => s.employees)
@@ -370,7 +358,6 @@ export function TeamPage() {
     return true
   })
 
-  // Compute team averages per role (yesterday + quarterly)
   const { roleAvgYesterday, roleQ3Avg } = useMemo(() => {
     const byRole: Record<string, { y: number[]; q: number[] }> = {}
     employees.forEach(emp => {
@@ -431,7 +418,6 @@ export function TeamPage() {
       />
 
       <div className="p-6">
-        {/* Status summary cards */}
         <div className="grid grid-cols-6 gap-3 mb-6">
           {Object.entries(STATUS_STYLES).map(([status, style]) => {
             const count = employees.filter(e => e.current_status === status).length
@@ -452,7 +438,6 @@ export function TeamPage() {
           })}
         </div>
 
-        {/* Filters */}
         <div className="flex items-center gap-3 mb-4 flex-wrap">
           <div className="flex gap-1 bg-slate-100 border border-slate-200 rounded-lg p-1">
             {STATUS_TABS.map(({ key, label }) => (
@@ -493,9 +478,7 @@ export function TeamPage() {
           <div className="ml-auto text-xs text-slate-400">{filtered.length} εμφανίζονται</div>
         </div>
 
-        {/* Table + detail panel */}
         <div className="flex gap-4 items-start">
-          {/* Table */}
           <div className={cn('bg-white rounded-xl border border-slate-200 overflow-hidden min-w-0', selectedEmp ? 'flex-1' : 'w-full')}>
             <table className="w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-200">
@@ -527,7 +510,6 @@ export function TeamPage() {
                         isSelected && 'bg-blue-50/70'
                       )}
                     >
-                      {/* Employee */}
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div
@@ -579,7 +561,6 @@ export function TeamPage() {
                         }
                       </td>
 
-                      {/* Actions — stopPropagation so row click doesn't fire */}
                       <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-1">
                           <button
@@ -624,8 +605,32 @@ export function TeamPage() {
             </table>
           </div>
 
-          {/* Detail panel */}
           {selectedEmp && (
             <EmployeeDetailPanel
               emp={selectedEmp}
-              teamAvgYesterday={roleAvgYes
+              teamAvgYesterday={roleAvgYesterday[selectedEmp.primary_role] ?? 100}
+              teamQ3Avg={roleQ3Avg[selectedEmp.primary_role] ?? 100}
+              weekShifts={weekShifts}
+              onEdit={() => { setEditEmp(selectedEmp); setShowModal(true) }}
+              onClose={() => setSelectedEmp(null)}
+              onBreak={async () => { await handleBreak(selectedEmp) }}
+              onSick={async () => { await handleSick(selectedEmp) }}
+            />
+          )}
+        </div>
+      </div>
+
+      {showModal && (
+        <EmployeeModal
+          employee={editEmp}
+          onClose={() => { setShowModal(false); setEditEmp(null) }}
+        />
+      )}
+
+      {showImport && (
+        <ScheduleImportModal onClose={() => setShowImport(false)} />
+      )}
+    </div>
+  )
+}
+
