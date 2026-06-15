@@ -3,6 +3,7 @@ import {
   Search, Plus, Coffee, UserX, X, TrendingUp, TrendingDown,
   Minus, Edit2, AlertTriangle,
 } from 'lucide-react'
+import { WEEKLY_SCHEDULE, SCHEDULE_DAYS, classifyShift } from '@/lib/schedule'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip,
   ResponsiveContainer, ReferenceLine, CartesianGrid,
@@ -23,7 +24,6 @@ const ROLE_BENCHMARK: Record<string, number> = {
   operator: 190, picker: 77, packer: 80, sorter: 150, transporter: 120,
 }
 
-const DAYS_SHORT = ['Κυρ', 'Δευ', 'Τρι', 'Τετ', 'Πεμ', 'Παρ', 'Σαβ']
 const MONTHS_SHORT = ['Ιαν', 'Φεβ', 'Μαρ', 'Απρ', 'Μαϊ', 'Ιουν', 'Ιουλ', 'Αυγ', 'Σεπ', 'Οκτ', 'Νοε', 'Δεκ']
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
@@ -85,24 +85,6 @@ function getYesterdayUPH(emp: Employee): number {
   return Math.round(baseline * (1 + noise))
 }
 
-/** Weekly schedule pattern (Mon–Sun for current week) */
-function getWeeklySchedule(emp: Employee) {
-  const seed = empSeed(emp)
-  const baseWorkDays = [1, 2, 3, 4, 5]
-  if (seededVal(seed, 8) > 0.7) baseWorkDays.push(6)
-  if (seededVal(seed, 9) > 0.9) baseWorkDays.push(0)
-
-  // One random day off from weekdays
-  const hasExtraOff = seededVal(seed, 11) > 0.4
-  const offDayIdx = Math.floor(seededVal(seed, 10) * 5)
-  const workDays = baseWorkDays.filter((_, i) => !(hasExtraOff && i === offDayIdx))
-
-  return Array.from({ length: 7 }, (_, i) => {
-    const isWorking = workDays.includes(i)
-    const isNight = isWorking && emp.primary_role === 'sorter'
-    return { day: DAYS_SHORT[i], isWorking, shift: isWorking ? (isNight ? 'Β' : 'Π') : null }
-  })
-}
 
 // ── EmployeeDetailPanel ───────────────────────────────────────────────────────
 
@@ -120,7 +102,7 @@ function EmployeeDetailPanel({
   const history    = getProductivityHistory(emp)
   const yUPH       = getYesterdayUPH(emp)
   const benchmark  = getEmpBaseline(emp)
-  const schedule   = getWeeklySchedule(emp)
+  const empSchedule = WEEKLY_SCHEDULE[emp.employee_code] ?? null
   const q3Avg      = Math.round(history.reduce((a, b) => a + b.uph, 0) / history.length)
   const diffYest   = Math.round(((yUPH - teamAvgYesterday) / teamAvgYesterday) * 100)
   const diffQ3     = Math.round(((q3Avg - teamQ3Avg) / teamQ3Avg) * 100)
@@ -286,29 +268,44 @@ function EmployeeDetailPanel({
 
         {/* Weekly schedule */}
         <div>
-          <div className="text-[10px] font-mono uppercase tracking-widest text-slate-400 mb-2">Πρόγραμμα Εβδομάδας</div>
-          <div className="grid grid-cols-7 gap-1">
-            {schedule.map(({ day, isWorking, shift }) => (
-              <div key={day} className="text-center">
-                <div className="text-[9px] text-slate-400 mb-1">{day}</div>
-                <div className={cn(
-                  'h-8 rounded text-[9px] font-bold flex items-center justify-center',
-                  isWorking
-                    ? shift === 'Β'
-                      ? 'bg-purple-100 text-purple-700'
-                      : 'bg-blue-100 text-blue-700'
-                    : 'bg-slate-100 text-slate-300'
-                )}>
-                  {isWorking ? shift : '–'}
-                </div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[10px] font-mono uppercase tracking-widest text-slate-400">Πρόγραμμα Εβδομάδας</div>
+            <div className="text-[9px] text-slate-400">15–21 Ιουν</div>
+          </div>
+          {empSchedule ? (
+            <>
+              <div className="grid grid-cols-7 gap-1">
+                {SCHEDULE_DAYS.map((day, i) => {
+                  const s = classifyShift(empSchedule[i])
+                  return (
+                    <div key={day} className="text-center" title={s.full ?? 'Ρεπό'}>
+                      <div className="text-[9px] text-slate-400 mb-1">{day}</div>
+                      <div className={cn('h-9 rounded text-[10px] font-bold flex items-center justify-center', s.bg, s.text)}>
+                        {s.label}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-            ))}
-          </div>
-          <div className="flex gap-3 mt-2">
-            <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded bg-blue-200" /><span className="text-[10px] text-slate-400">Πρωινή</span></div>
-            <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded bg-purple-200" /><span className="text-[10px] text-slate-400">Βραδινή</span></div>
-            <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded bg-slate-100" /><span className="text-[10px] text-slate-400">Ρεπό</span></div>
-          </div>
+              <div className="flex gap-2 flex-wrap mt-2">
+                {[
+                  { bg: 'bg-blue-200',   label: '06–07' },
+                  { bg: 'bg-sky-200',    label: '09–11' },
+                  { bg: 'bg-amber-200',  label: '13' },
+                  { bg: 'bg-purple-200', label: '18 Βράδυ' },
+                  { bg: 'bg-red-200',    label: 'Άρρωστος' },
+                  { bg: 'bg-slate-100',  label: 'Ρεπό' },
+                ].map(({ bg, label }) => (
+                  <div key={label} className="flex items-center gap-1">
+                    <div className={cn('w-2 h-2 rounded', bg)} />
+                    <span className="text-[9px] text-slate-400">{label}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="text-xs text-slate-400 italic py-2">Δεν υπάρχουν δεδομένα προγράμματος</div>
+          )}
         </div>
 
         {/* Actions */}
@@ -632,3 +629,4 @@ export function TeamPage() {
     </div>
   )
 }
+                                                                                                                                                                                                                                                                       
