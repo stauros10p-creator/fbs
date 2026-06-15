@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react'
-import { Upload, X, Check, AlertTriangle, Loader2, FileSpreadsheet } from 'lucide-react'
+import { Upload, X, Check, AlertTriangle, Loader2, FileSpreadsheet, Calendar } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase, WAREHOUSE_ID } from '@/lib/supabase'
 import { useAppStore } from '@/store'
@@ -334,7 +334,4 @@ export function ScheduleImportModal({ onClose }: { onClose: () => void }) {
           )}
         </div>
       </div>
-    </div>
-  )
-}
-
+    </d

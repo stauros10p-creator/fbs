@@ -417,7 +417,6 @@ export function useWeekShifts() {
         .gte('shift_date', weekStart)
         .lte('shift_date', weekEnd)
       if (error) throw error
-      // Build map: employee_id => [Mon...Sun] (Shift | null)
       const byEmp: Record<string, (Shift | null)[]> = {}
       ;(data as Shift[]).forEach(shift => {
         const idx = weekDates.indexOf(shift.shift_date)
@@ -426,6 +425,25 @@ export function useWeekShifts() {
         byEmp[shift.employee_id][idx] = shift
       })
       return byEmp
+    },
+  })
+}
+
+// ---- Employee Shifts (history) ----
+export function useEmployeeShifts(employeeId: string | undefined, limit = 30) {
+  return useQuery({
+    queryKey: ['employee-shifts', employeeId, limit],
+    enabled: !!employeeId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('shifts')
+        .select('*')
+        .eq('employee_id', employeeId!)
+        .eq('warehouse_id', WAREHOUSE_ID)
+        .order('shift_date', { ascending: false })
+        .limit(limit)
+      if (error) throw error
+      return data as Shift[]
     },
   })
 }
