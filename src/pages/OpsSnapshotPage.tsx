@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { BarChart2, TrendingUp, Activity, Clock, ChevronRight } from 'lucide-react'
+import { BarChart2, TrendingUp, Activity, Clock, ChevronRight, CalendarCheck } from 'lucide-react'
 import type { FC, SVGProps } from 'react'
 
 interface ReportCard {
@@ -35,6 +35,16 @@ const REPORTS: ReportCard[] = [
     accentBg: 'bg-green-500/10',
     accentText: 'text-green-500',
     accentBorder: 'hover:border-green-400/50',
+  },
+  {
+    to: '/ops/duedate',
+    Icon: CalendarCheck,
+    label: 'Due Date Report',
+    description: 'Ολοκληρωμένες σήμερα ανά due date (OTD %) και εκκρεμείς / χρεωστούμενες παραγγελίες',
+    tags: ['OTD %', 'Εγκαίρως', 'Χρεωστ.', 'Ανά ημέρα'],
+    accentBg: 'bg-teal-500/10',
+    accentText: 'text-teal-600',
+    accentBorder: 'hover:border-teal-400/50',
   },
   {
     to: '/ops/picking',

@@ -8,6 +8,7 @@ import { ForecastPage } from '@/pages/ForecastPage'
 import { OpsSnapshotPage } from '@/pages/OpsSnapshotPage'
 import { OpsOtdPage } from '@/pages/OpsOtdPage'
 import { OpsThroughputPage } from '@/pages/OpsThroughputPage'
+import { OpsDueDatePage } from '@/pages/OpsDueDatePage'
 import { CopilotPage } from '@/pages/CopilotPage'
 import { StaffPlanPage } from '@/pages/StaffPlanPage'
 import { HourlyForecastPage } from '@/pages/HourlyForecastPage'
@@ -26,6 +27,7 @@ export default function App() {
             <Route path="/ops" element={<OpsSnapshotPage />} />
             <Route path="/ops/otd" element={<OpsOtdPage />} />
             <Route path="/ops/throughput" element={<OpsThroughputPage />} />
+            <Route path="/ops/duedate" element={<OpsDueDatePage />} />
             <Route path="/copilot" element={<CopilotPage />} />
             <Route path="/staff-plan" element={<StaffPlanPage />} />
             <Route path="/hourly-forecast" element={<HourlyForecastPage />} />

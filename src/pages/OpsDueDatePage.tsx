@@ -1,0 +1,304 @@
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { supabase } from '@/lib/supabase'
+import { cn } from '@/lib/utils'
+import { RefreshCw, ArrowLeft, CheckCircle, Clock } from 'lucide-react'
+
+interface CompletedRow {
+  DueDate: string
+  OnTime: number | null
+  Early:  number | null
+  Late:   number | null
+  Total:  number | null
+}
+
+interface PendingRow {
+  DueDate:   string
+  Pending:   number | null
+  IntraDay:  number | null
+  AutoStore: number | null
+  Polikes:   number | null
+  Monikes:   number | null
+}
+
+interface DueDateSnapshot {
+  id:              number
+  generated_at:    string
+  completed_today: CompletedRow[]
+  pending:         PendingRow[]
+}
+
+function fmt(n: number | null | undefined) {
+  if (n === null || n === undefined) return '—'
+  return n.toLocaleString('el-GR')
+}
+
+function otdPct(row: CompletedRow): number | null {
+  if (!row.Total) return null
+  return Math.round(((row.OnTime ?? 0) + (row.Early ?? 0)) / row.Total * 100)
+}
+
+function isToday(dateStr: string): boolean {
+  return dateStr === new Date().toISOString().slice(0, 10)
+}
+
+function isOverdue(dateStr: string): boolean {
+  return dateStr < new Date().toISOString().slice(0, 10)
+}
+
+export function OpsDueDatePage() {
+  const navigate = useNavigate()
+  const [snapshot, setSnapshot] = useState<DueDateSnapshot | null>(null)
+  const [loading, setLoading]   = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+
+  async function load(showRefresh = false) {
+    if (showRefresh) setRefreshing(true)
+    else setLoading(true)
+    const { data, error } = await supabase
+      .from('due_date_snapshots')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+    if (!error && data) setSnapshot(data as DueDateSnapshot)
+    setLoading(false)
+    setRefreshing(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  const completed = snapshot?.completed_today ?? []
+  const pending   = snapshot?.pending ?? []
+
+  const totalCompleted = completed.reduce((s, r) => s + (r.Total ?? 0), 0)
+  const totalOnTime    = completed.reduce((s, r) => s + (r.OnTime ?? 0) + (r.Early ?? 0), 0)
+  const totalLate      = completed.reduce((s, r) => s + (r.Late ?? 0), 0)
+  const totalPending   = pending.reduce((s, r) => s + (r.Pending ?? 0), 0)
+  const totalOverdue   = pending.filter(r => isOverdue(r.DueDate)).reduce((s, r) => s + (r.Pending ?? 0), 0)
+  const overallOtd     = totalCompleted ? Math.round((totalOnTime / totalCompleted) * 100) : null
+
+  return (
+    <div className="min-h-full">
+      <PageHeader
+        accent="Operations Module"
+        title="DUE DATE REPORT"
+        subtitle="Ολοκληρωμένες σήμερα & εκκρεμείς ανά ημερομηνία"
+        actions={
+          <div className="flex items-center gap-2">
+            <button onClick={() => navigate('/ops')} className="btn-secondary text-xs flex items-center gap-1.5">
+              <ArrowLeft className="w-3.5 h-3.5" /> Πίσω
+            </button>
+            <button onClick={() => load(true)} disabled={refreshing} className="btn-secondary text-xs flex items-center gap-1.5">
+              <RefreshCw className={cn('w-3.5 h-3.5', refreshing && 'animate-spin')} /> Refresh
+            </button>
+          </div>
+        }
+      />
+
+      <div className="p-8 space-y-6">
+        {loading && <div className="text-center py-20 text-muted text-sm">Loading...</div>}
+
+        {!loading && !snapshot && (
+          <div className="text-center py-20 text-muted text-sm">
+            No data. Run the script first, then create the Supabase table.
+          </div>
+        )}
+
+        {!loading && snapshot && (
+          <>
+            <div className="text-xs text-muted font-mono">⏱ {snapshot.generated_at}</div>
+
+            {/* KPI row */}
+            <div className="grid grid-cols-4 gap-4">
+              {[
+                { label: 'Ολοκληρωμένες σήμερα', val: fmt(totalCompleted), color: 'text-slate-800' },
+                { label: 'Εγκαίρως',  val: fmt(totalOnTime), color: 'text-green-500' },
+                { label: 'Με καθυστέρηση', val: fmt(totalLate), color: totalLate > 0 ? 'text-red-500' : 'text-muted' },
+                { label: 'Εκκρεμείς', val: fmt(totalPending), color: totalPending > 0 ? 'text-orange-500' : 'text-muted' },
+              ].map(k => (
+                <div key={k.label} className="panel text-center">
+                  <div className="text-xs text-muted uppercase tracking-widest mb-1">{k.label}</div>
+                  <div className={cn('text-2xl font-bold font-mono', k.color)}>{k.val}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* OTD % overall */}
+            {overallOtd !== null && (
+              <div className="panel flex items-center gap-4">
+                <CheckCircle className={cn('w-5 h-5', overallOtd >= 95 ? 'text-green-500' : overallOtd >= 85 ? 'text-orange-400' : 'text-red-500')} />
+                <div>
+                  <div className="text-xs text-muted uppercase tracking-wider">OTD σήμερα (On Time + Νωρίς)</div>
+                  <div className={cn('text-2xl font-bold', overallOtd >= 95 ? 'text-green-500' : overallOtd >= 85 ? 'text-orange-400' : 'text-red-500')}>
+                    {overallOtd}%
+                  </div>
+                </div>
+                <div className="ml-auto text-xs text-muted">
+                  {fmt(totalOnTime)} εγκαίρως από {fmt(totalCompleted)} συνολικά
+                </div>
+              </div>
+            )}
+
+            {/* ── Section 1: Completed today ── */}
+            <div className="panel p-0 overflow-hidden">
+              <div className="px-5 py-3 bg-slate-50 border-b border-border flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-green-500" />
+                <span className="text-xs font-bold tracking-widest text-muted uppercase">
+                  Ολοκληρωμένες σήμερα ανά Due Date
+                </span>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-[11px] text-muted uppercase tracking-wider border-b border-border bg-slate-50/50">
+                    <th className="text-left px-5 py-2 font-medium">Due Date</th>
+                    <th className="text-right px-5 py-2 font-medium">Σύνολο</th>
+                    <th className="text-right px-5 py-2 font-medium">Εγκαίρως</th>
+                    <th className="text-right px-5 py-2 font-medium">Νωρίς</th>
+                    <th className="text-right px-5 py-2 font-medium">Αργά</th>
+                    <th className="text-right px-5 py-2 font-medium">OTD %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {completed.length === 0 && (
+                    <tr><td colSpan={6} className="text-center py-8 text-muted text-xs">Δεν υπάρχουν δεδομένα</td></tr>
+                  )}
+                  {completed.map(row => {
+                    const pct = otdPct(row)
+                    const late = row.Late ?? 0
+                    return (
+                      <tr key={row.DueDate} className="border-b border-border/50 hover:bg-slate-50">
+                        <td className="px-5 py-2.5 font-mono text-slate-700 font-medium">
+                          {row.DueDate}
+                          {isToday(row.DueDate) && (
+                            <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded font-sans">σήμερα</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-2.5 text-right font-mono font-semibold text-slate-800">{fmt(row.Total)}</td>
+                        <td className="px-5 py-2.5 text-right font-mono text-green-500">{fmt(row.OnTime)}</td>
+                        <td className="px-5 py-2.5 text-right font-mono text-blue-500">{fmt(row.Early)}</td>
+                        <td className={cn('px-5 py-2.5 text-right font-mono font-semibold', late > 0 ? 'text-red-500' : 'text-muted')}>
+                          {fmt(row.Late)}
+                        </td>
+                        <td className="px-5 py-2.5 text-right">
+                          {pct !== null && (
+                            <span className={cn(
+                              'text-xs font-bold px-2 py-0.5 rounded',
+                              pct >= 95 ? 'bg-green-100 text-green-600' :
+                              pct >= 85 ? 'bg-orange-100 text-orange-500' :
+                              'bg-red-100 text-red-500'
+                            )}>{pct}%</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  {/* Σύνολο */}
+                  {completed.length > 1 && (
+                    <tr className="bg-slate-50 border-t border-border font-semibold">
+                      <td className="px-5 py-2 text-slate-700">Σύνολο</td>
+                      <td className="px-5 py-2 text-right font-mono text-slate-800">{fmt(totalCompleted)}</td>
+                      <td className="px-5 py-2 text-right font-mono text-green-500">{fmt(totalOnTime)}</td>
+                      <td className="px-5 py-2 text-right font-mono text-blue-500">—</td>
+                      <td className={cn('px-5 py-2 text-right font-mono', totalLate > 0 ? 'text-red-500' : 'text-muted')}>{fmt(totalLate)}</td>
+                      <td className="px-5 py-2 text-right">
+                        {overallOtd !== null && (
+                          <span className={cn(
+                            'text-xs font-bold px-2 py-0.5 rounded',
+                            overallOtd >= 95 ? 'bg-green-100 text-green-600' :
+                            overallOtd >= 85 ? 'bg-orange-100 text-orange-500' :
+                            'bg-red-100 text-red-500'
+                          )}>{overallOtd}%</span>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ── Section 2: Pending / Overdue ── */}
+            <div className="panel p-0 overflow-hidden">
+              <div className="px-5 py-3 bg-slate-50 border-b border-border flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-orange-400" />
+                  <span className="text-xs font-bold tracking-widest text-muted uppercase">
+                    Εκκρεμείς παραγγελίες ανά Due Date
+                  </span>
+                </div>
+                {totalOverdue > 0 && (
+                  <span className="text-xs font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded">
+                    {fmt(totalOverdue)} χρεωστούμενες
+                  </span>
+                )}
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-[11px] text-muted uppercase tracking-wider border-b border-border bg-slate-50/50">
+                    <th className="text-left px-5 py-2 font-medium">Due Date</th>
+                    <th className="text-right px-5 py-2 font-medium">Σύνολο</th>
+                    <th className="text-right px-5 py-2 font-medium">IntraDay</th>
+                    <th className="text-right px-5 py-2 font-medium">AutoStore</th>
+                    <th className="text-right px-5 py-2 font-medium">Πολυγρ.</th>
+                    <th className="text-right px-5 py-2 font-medium">Μονογρ.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pending.length === 0 && (
+                    <tr><td colSpan={6} className="text-center py-8 text-green-500 text-xs font-semibold">
+                      ✓ Δεν υπάρχουν εκκρεμείς παραγγελίες
+                    </td></tr>
+                  )}
+                  {pending.map(row => {
+                    const overdue = isOverdue(row.DueDate)
+                    const today   = isToday(row.DueDate)
+                    return (
+                      <tr key={row.DueDate} className={cn(
+                        'border-b border-border/50',
+                        overdue ? 'bg-red-50/40 hover:bg-red-50' : 'hover:bg-slate-50'
+                      )}>
+                        <td className="px-5 py-2.5 font-mono font-medium">
+                          <span className={overdue ? 'text-red-500' : 'text-slate-700'}>{row.DueDate}</span>
+                          {overdue && <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-red-100 text-red-500 rounded font-sans">χρεωστ.</span>}
+                          {today  && <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-orange-100 text-orange-500 rounded font-sans">σήμερα</span>}
+                        </td>
+                        <td className={cn('px-5 py-2.5 text-right font-mono font-bold', overdue ? 'text-red-500' : 'text-slate-800')}>
+                          {fmt(row.Pending)}
+                        </td>
+                        <td className="px-5 py-2.5 text-right font-mono text-slate-600">{fmt(row.IntraDay)}</td>
+                        <td className="px-5 py-2.5 text-right font-mono text-slate-600">{fmt(row.AutoStore)}</td>
+                        <td className="px-5 py-2.5 text-right font-mono text-slate-600">{fmt(row.Polikes)}</td>
+                        <td className="px-5 py-2.5 text-right font-mono text-slate-600">{fmt(row.Monikes)}</td>
+                      </tr>
+                    )
+                  })}
+                  {pending.length > 1 && (
+                    <tr className="bg-slate-50 border-t border-border font-semibold">
+                      <td className="px-5 py-2 text-slate-700">Σύνολο</td>
+                      <td className={cn('px-5 py-2 text-right font-mono', totalOverdue > 0 ? 'text-red-500' : 'text-slate-800')}>
+                        {fmt(totalPending)}
+                      </td>
+                      <td className="px-5 py-2 text-right font-mono text-slate-500">
+                        {fmt(pending.reduce((s, r) => s + (r.IntraDay ?? 0), 0))}
+                      </td>
+                      <td className="px-5 py-2 text-right font-mono text-slate-500">
+                        {fmt(pending.reduce((s, r) => s + (r.AutoStore ?? 0), 0))}
+                      </td>
+                      <td className="px-5 py-2 text-right font-mono text-slate-500">
+                        {fmt(pending.reduce((s, r) => s + (r.Polikes ?? 0), 0))}
+                      </td>
+                      <td className="px-5 py-2 text-right font-mono text-slate-500">
+                        {fmt(pending.reduce((s, r) => s + (r.Monikes ?? 0), 0))}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
