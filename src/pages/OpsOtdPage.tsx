@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
-import { RefreshCw, ArrowLeft } from 'lucide-react'
+import { RefreshCw, ArrowLeft, Truck } from 'lucide-react'
 
 interface OTDRow {
   PERIOD: string
@@ -74,17 +74,48 @@ function ProgressBar({ value, max, color }: { value: number | null; max: number 
   )
 }
 
-function MetricRow({ label, today, yst, lw }: { label: string; today: number | null | undefined; yst: number | null | undefined; lw: number | null | undefined }) {
-  const chgYst = vsChg(today, yst)
+// 6-column metric row: Label | Today | vs Χθες | Χθες | vs LW | Last Week
+function MetricRow({ label, today, yst, lw }: {
+  label: string
+  today: number | null | undefined
+  yst:   number | null | undefined
+  lw:    number | null | undefined
+}) {
   return (
-    <div className="grid grid-cols-5 items-center py-2 border-b border-border/50 last:border-0 px-5">
-      <div className="text-xs text-muted col-span-1">{label}</div>
+    <div className="grid grid-cols-6 items-center py-2 border-b border-border/50 last:border-0 px-5">
+      <div className="text-xs text-muted">{label}</div>
       <div className="text-center text-sm font-semibold text-slate-800">{fmt(today)}</div>
-      <div className="text-center text-xs"><VsBadge value={chgYst} /></div>
+      <div className="text-center text-xs"><VsBadge value={vsChg(today, yst)} /></div>
       <div className="text-center text-sm text-slate-500">{fmt(yst)}</div>
+      <div className="text-center text-xs"><VsBadge value={vsChg(today, lw)} /></div>
       <div className="text-center text-sm text-slate-400">{fmt(lw)}</div>
     </div>
   )
+}
+
+function useCountdown(targetHour = 1, targetMin = 45) {
+  const [timeLeft, setTimeLeft] = useState('')
+  const [urgency, setUrgency] = useState<'ok' | 'warn' | 'critical'>('ok')
+
+  useEffect(() => {
+    function tick() {
+      const now = new Date()
+      const target = new Date(now)
+      target.setHours(targetHour, targetMin, 0, 0)
+      if (now >= target) target.setDate(target.getDate() + 1)
+      const diff = target.getTime() - now.getTime()
+      const h = Math.floor(diff / 3600000)
+      const m = Math.floor((diff % 3600000) / 60000)
+      const s = Math.floor((diff % 60000) / 1000)
+      setTimeLeft(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`)
+      setUrgency(diff < 3600000 ? 'critical' : diff < 7200000 ? 'warn' : 'ok')
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [targetHour, targetMin])
+
+  return { timeLeft, urgency }
 }
 
 export function OpsOtdPage() {
@@ -92,6 +123,7 @@ export function OpsOtdPage() {
   const [snapshot, setSnapshot] = useState<OTDSnapshot | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const { timeLeft, urgency } = useCountdown(1, 45)
 
   async function load(showRefresh = false) {
     if (showRefresh) setRefreshing(true)
@@ -118,9 +150,10 @@ export function OpsOtdPage() {
   const lwSameTime  = lw?.SYNOLIKA ?? null
   const lwFinal     = lw?.SYNOLOIMERAS ?? null
 
-  const pctVsYst = pct(today?.SYNOLIKA, ystFinal ?? ystSameTime)
-  const pctVsLw  = pct(today?.SYNOLIKA, lwFinal ?? lwSameTime)
+  const pctVsYst   = pct(today?.SYNOLIKA, ystFinal ?? ystSameTime)
+  const pctVsLw    = pct(today?.SYNOLIKA, lwFinal ?? lwSameTime)
   const totalVsYst = vsChg(today?.SYNOLIKA, ystSameTime)
+  const totalVsLw  = vsChg(today?.SYNOLIKA, lwSameTime)
 
   function estimate(): number | null {
     if (!today?.SYNOLIKA) return null
@@ -140,6 +173,9 @@ export function OpsOtdPage() {
 
   const totalRemaining = (today?.YPOLRAFI ?? 0) + (today?.YPOLSAMEDAY ?? 0)
     + (today?.YPOLAUTOSTORE ?? 0) + (today?.YPOLINTRADAY ?? 0)
+
+  const countdownColor = urgency === 'critical'
+    ? 'text-red-500' : urgency === 'warn' ? 'text-orange-400' : 'text-green-500'
 
   return (
     <div className="min-h-full">
@@ -174,9 +210,9 @@ export function OpsOtdPage() {
 
             {/* Main comparison table */}
             <div className="panel p-0 overflow-hidden">
-              {/* Column headers */}
-              <div className="grid grid-cols-5 border-b border-border bg-slate-50">
-                <div className="col-span-1" />
+              {/* Headers — 6 cols */}
+              <div className="grid grid-cols-6 border-b border-border bg-slate-50">
+                <div />
                 <div className="text-center py-3 border-b-2 border-blue-500">
                   <div className="text-xs font-semibold text-blue-500 uppercase tracking-wider">Today</div>
                   <div className="text-[11px] text-muted">{today?.HMEROMINIA ?? '—'}</div>
@@ -186,6 +222,7 @@ export function OpsOtdPage() {
                   <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Yesterday</div>
                   <div className="text-[11px] text-muted">{yst?.HMEROMINIA ?? '—'}</div>
                 </div>
+                <div className="text-center py-3 flex items-center justify-center text-[11px] text-muted">vs LW</div>
                 <div className="text-center py-3 border-b-2 border-slate-200">
                   <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Last Week</div>
                   <div className="text-[11px] text-muted">{lw?.HMEROMINIA ?? '—'}</div>
@@ -193,7 +230,7 @@ export function OpsOtdPage() {
               </div>
 
               {/* Σύνολο */}
-              <div className="grid grid-cols-5 items-start py-3 px-5 border-b border-border">
+              <div className="grid grid-cols-6 items-start py-3 px-5 border-b border-border">
                 <div className="text-xs text-muted pt-2">Σύνολο</div>
                 <div className="text-center">
                   <div className="text-xl font-bold text-blue-500">{fmt(today?.SYNOLIKA)}</div>
@@ -202,42 +239,35 @@ export function OpsOtdPage() {
                 <div className="flex items-center justify-center">
                   <VsBadge value={totalVsYst} />
                 </div>
-                {/* Yesterday: same-time + final */}
                 <div className="text-center">
-                  {ystSameTime !== null && (
-                    <div>
-                      <div className="text-base font-semibold text-slate-700">{fmt(ystSameTime)}</div>
-                      <div className="text-[10px] text-muted">έως τώρα</div>
-                    </div>
-                  )}
-                  {ystFinal !== null && (
-                    <div className="mt-1">
-                      <div className="text-sm font-medium text-slate-400">{fmt(ystFinal)}</div>
-                      <div className="text-[10px] text-muted">τελικό</div>
-                    </div>
-                  )}
+                  {ystSameTime !== null && <>
+                    <div className="text-base font-semibold text-slate-700">{fmt(ystSameTime)}</div>
+                    <div className="text-[10px] text-muted">έως τώρα</div>
+                  </>}
+                  {ystFinal !== null && <div className="mt-1">
+                    <div className="text-sm font-medium text-slate-400">{fmt(ystFinal)}</div>
+                    <div className="text-[10px] text-muted">τελικό</div>
+                  </div>}
                 </div>
-                {/* Last Week: same-time + final */}
+                <div className="flex items-center justify-center">
+                  <VsBadge value={totalVsLw} />
+                </div>
                 <div className="text-center">
-                  {lwSameTime !== null && (
-                    <div>
-                      <div className="text-base font-semibold text-slate-700">{fmt(lwSameTime)}</div>
-                      <div className="text-[10px] text-muted">έως τώρα</div>
-                    </div>
-                  )}
-                  {lwFinal !== null && (
-                    <div className="mt-1">
-                      <div className="text-sm font-medium text-slate-400">{fmt(lwFinal)}</div>
-                      <div className="text-[10px] text-muted">τελικό</div>
-                    </div>
-                  )}
+                  {lwSameTime !== null && <>
+                    <div className="text-base font-semibold text-slate-700">{fmt(lwSameTime)}</div>
+                    <div className="text-[10px] text-muted">έως τώρα</div>
+                  </>}
+                  {lwFinal !== null && <div className="mt-1">
+                    <div className="text-sm font-medium text-slate-400">{fmt(lwFinal)}</div>
+                    <div className="text-[10px] text-muted">τελικό</div>
+                  </div>}
                 </div>
               </div>
 
               {/* Progress */}
-              <div className="grid grid-cols-5 items-center py-3 px-5 border-b border-border">
+              <div className="grid grid-cols-6 items-center py-3 px-5 border-b border-border">
                 <div className="text-xs text-muted">Πρόοδος</div>
-                <div className="col-span-2 space-y-2">
+                <div className="col-span-3 space-y-2">
                   <div>
                     <div className="flex justify-between text-[11px] text-muted mb-1">
                       <span>vs χθες τελικό</span><PctBadge value={pctVsYst} />
@@ -255,12 +285,13 @@ export function OpsOtdPage() {
                 <div className="text-center text-xs text-muted">—</div>
               </div>
 
-              {/* Subheader for metrics */}
-              <div className="grid grid-cols-5 px-5 py-1.5 bg-slate-50 border-b border-border">
+              {/* Subheader for metric rows */}
+              <div className="grid grid-cols-6 px-5 py-1.5 bg-slate-50 border-b border-border">
                 <div />
                 <div className="text-center text-[10px] text-muted uppercase tracking-wider">Today</div>
                 <div className="text-center text-[10px] text-muted uppercase tracking-wider">vs Χθες</div>
                 <div className="text-center text-[10px] text-muted uppercase tracking-wider">Yesterday</div>
+                <div className="text-center text-[10px] text-muted uppercase tracking-wider">vs LW</div>
                 <div className="text-center text-[10px] text-muted uppercase tracking-wider">Last Week</div>
               </div>
 
@@ -271,16 +302,16 @@ export function OpsOtdPage() {
               <MetricRow label="Gift"      today={today?.GIFTORDERS} yst={yst?.GIFTORDERS} lw={lw?.GIFTORDERS} />
             </div>
 
-            {/* Ανάλυση ρυθμού + Υπόλοιπα panels */}
+            {/* Ανάλυση ρυθμού + Υπόλοιπα */}
             <div className="grid grid-cols-2 gap-4">
               <div className="panel">
                 <div className="text-xs font-bold tracking-widest text-muted uppercase mb-3">Ανάλυση ρυθμού</div>
                 {[
                   { label: 'Εκτίμηση τέλους', val: estimate() ? `~${fmt(estimate())}` : '—' },
-                  { label: 'AutoStore %', val: today?.SYNOLIKA && today?.AUTOSTORE ? `${Math.round((today.AUTOSTORE / today.SYNOLIKA) * 100)}%` : '—' },
+                  { label: 'AutoStore %', val: today?.SYNOLIKA && today?.AUTOSTORE != null ? `${Math.round((today.AUTOSTORE / today.SYNOLIKA) * 100)}%` : '—' },
                   { label: 'Gift %', val: today?.SYNOLIKA && today?.GIFTORDERS ? `${((today.GIFTORDERS / today.SYNOLIKA) * 100).toFixed(1)}%` : '—' },
                   { label: 'Ογκώδη %', val: today?.SYNOLIKA && today?.OGKODH ? `${((today.OGKODH / today.SYNOLIKA) * 100).toFixed(1)}%` : '—' },
-                  { label: 'Ράφι %', val: today?.SYNOLIKA && today?.POLIKES ? `${Math.round((today.POLIKES / today.SYNOLIKA) * 100)}%` : '—' },
+                  { label: 'Ράφι %', val: today?.SYNOLIKA && today?.AUTOSTORE != null ? `${Math.round(((today.SYNOLIKA - (today.AUTOSTORE ?? 0)) / today.SYNOLIKA) * 100)}%` : '—' },
                 ].map(({ label, val }) => (
                   <div key={label} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0 text-sm">
                     <span className="text-muted">{label}</span>
@@ -289,21 +320,52 @@ export function OpsOtdPage() {
                 ))}
               </div>
 
+              {/* Υπόλοιπα — with IntraDay countdown */}
               <div className="panel">
                 <div className="text-xs font-bold tracking-widest text-muted uppercase mb-3">Υπόλοιπα σήμερα</div>
-                {[
-                  { label: 'Shelf Orders', val: today?.YPOLRAFI,      urgent: false },
-                  { label: 'Same Day',     val: today?.YPOLSAMEDAY,   urgent: true },
-                  { label: 'AutoStore',    val: today?.YPOLAUTOSTORE, urgent: false },
-                  { label: 'Intra Day',    val: today?.YPOLINTRADAY,  urgent: true },
-                ].map(({ label, val, urgent }) => (
-                  <div key={label} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0 text-sm">
-                    <span className="text-muted">{label}</span>
-                    <span className={cn('font-semibold', urgent && (val ?? 0) > 0 ? 'text-red-500' : 'text-slate-800')}>
-                      {fmt(val)}{urgent && (val ?? 0) > 0 ? ' ⚠' : ''}
+
+                {/* Shelf Orders */}
+                <div className="flex justify-between items-center py-2 border-b border-border/50 text-sm">
+                  <span className="text-muted">Shelf Orders</span>
+                  <span className="font-semibold text-slate-800">{fmt(today?.YPOLRAFI)}</span>
+                </div>
+
+                {/* Same Day */}
+                <div className="flex justify-between items-center py-2 border-b border-border/50 text-sm">
+                  <span className="text-muted">Same Day</span>
+                  <span className={cn('font-semibold', (today?.YPOLSAMEDAY ?? 0) > 0 ? 'text-red-500' : 'text-slate-800')}>
+                    {fmt(today?.YPOLSAMEDAY)}{(today?.YPOLSAMEDAY ?? 0) > 0 ? ' ⚠' : ''}
+                  </span>
+                </div>
+
+                {/* AutoStore */}
+                <div className="flex justify-between items-center py-2 border-b border-border/50 text-sm">
+                  <span className="text-muted">AutoStore</span>
+                  <span className="font-semibold text-slate-800">{fmt(today?.YPOLAUTOSTORE)}</span>
+                </div>
+
+                {/* Intra Day — with countdown */}
+                <div className="py-2 border-b border-border/50">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted">Intra Day</span>
+                    <span className={cn('font-semibold', (today?.YPOLINTRADAY ?? 0) > 0 ? 'text-orange-500' : 'text-slate-800')}>
+                      {fmt(today?.YPOLINTRADAY)}{(today?.YPOLINTRADAY ?? 0) > 0 ? ' ⚠' : ''}
                     </span>
                   </div>
-                ))}
+                  {/* Countdown — always visible so team can plan */}
+                  <div className={cn(
+                    'mt-1.5 flex items-center gap-1.5 text-xs rounded-lg px-2 py-1.5',
+                    urgency === 'critical' ? 'bg-red-50' : urgency === 'warn' ? 'bg-orange-50' : 'bg-green-50'
+                  )}>
+                    <Truck className={cn('w-3.5 h-3.5', countdownColor)} />
+                    <span className="text-muted">Άφιξη 01:45 — απομένουν</span>
+                    <span className={cn('font-mono font-bold ml-auto tabular-nums', countdownColor)}>
+                      {timeLeft}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Σύνολο */}
                 <div className="flex justify-between items-center py-2 border-t border-border text-sm font-semibold mt-1">
                   <span className="text-slate-600">Σύνολο</span>
                   <span className="text-slate-800">{fmt(totalRemaining)}</span>
@@ -324,26 +386,23 @@ export function OpsOtdPage() {
                       <th className="text-left px-4 py-2 font-medium">Τύπος</th>
                       <th className="text-right px-4 py-2 font-medium">Today</th>
                       <th className="text-right px-4 py-2 font-medium">vs Χθες</th>
-                      <th className="text-right px-4 py-2 font-medium">Χθες</th>
+                      <th className="text-right px-4 py-2 font-medium">vs LW</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {categories.map(c => {
-                      const chg = vsChg(c.todayVal, c.ystVal)
-                      return (
-                        <tr key={c.label} className="border-b border-border/50 hover:bg-slate-50">
-                          <td className="px-4 py-2 text-slate-600 font-medium">{c.label}</td>
-                          <td className="px-4 py-2 text-right font-mono font-semibold text-slate-800">{fmt(c.todayVal)}</td>
-                          <td className="px-4 py-2 text-right"><VsBadge value={chg} /></td>
-                          <td className="px-4 py-2 text-right font-mono text-slate-400">{fmt(c.ystVal)}</td>
-                        </tr>
-                      )
-                    })}
+                    {categories.map(c => (
+                      <tr key={c.label} className="border-b border-border/50 hover:bg-slate-50">
+                        <td className="px-4 py-2 text-slate-600 font-medium">{c.label}</td>
+                        <td className="px-4 py-2 text-right font-mono font-semibold text-slate-800">{fmt(c.todayVal)}</td>
+                        <td className="px-4 py-2 text-right"><VsBadge value={vsChg(c.todayVal, c.ystVal)} /></td>
+                        <td className="px-4 py-2 text-right"><VsBadge value={vsChg(c.todayVal, c.lwVal)} /></td>
+                      </tr>
+                    ))}
                     <tr className="bg-slate-50 border-t border-border font-semibold">
                       <td className="px-4 py-2 text-slate-700">Σύνολο</td>
                       <td className="px-4 py-2 text-right font-mono text-blue-500">{fmt(today?.SYNOLIKA)}</td>
                       <td className="px-4 py-2 text-right"><VsBadge value={totalVsYst} /></td>
-                      <td className="px-4 py-2 text-right font-mono text-slate-400">{fmt(ystSameTime)}</td>
+                      <td className="px-4 py-2 text-right"><VsBadge value={totalVsLw} /></td>
                     </tr>
                   </tbody>
                 </table>
