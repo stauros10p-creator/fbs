@@ -150,8 +150,8 @@ interface DayRow {
   key: string
   dow: number
   forecast: { total: number; due_date: number; intraday: number }
-  s1: StaffMap      // DD Βάρδια 1 (07-15)
-  s2: StaffMap      // DD Βάρδια 2 (13-21)
+  s1: StaffMap         // DD Βάρδια 1 (07-15 weekday / 09-17 Sat / 11-19 Sun)
+  s2: StaffMap | null  // DD Βάρδια 2 (13-21) — null on Sat/Sun (single shift day)
   si: StaffMap | null  // Intraday (18-02)
   hasIntraday: boolean
   s1Total: number
@@ -166,15 +166,18 @@ function buildMonthRows(year: number, month: number, notes: CalendarNote[]): Day
     const key = `${year}-${String(month).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`
     const forecast = getForDay(key, notes)
     const dow = new Date(key + 'T12:00:00').getDay()
+    // Intraday: Sun–Thu only (not Fri=5, not Sat=6)
     const hasIntraday = forecast.intraday > 0 && dow !== 5 && dow !== 6
-
-    const halfDD = Math.round(forecast.due_date / 2)
-    const s1 = staffForDDShift(halfDD, key)
-    const s2 = staffForDDShift(halfDD, key)  // same as s1 (50/50 split)
+    // Sat (6) and Sun (0): single DD shift with full orders
+    // Weekdays (Mon–Fri): two shifts split 50/50
+    const isSatOrSun = dow === 6 || dow === 0
+    const s1Orders = isSatOrSun ? forecast.due_date : Math.round(forecast.due_date / 2)
+    const s1 = staffForDDShift(s1Orders, key)
+    const s2 = isSatOrSun ? null : staffForDDShift(Math.round(forecast.due_date / 2), key)
     const si = hasIntraday ? staffForIntraday(forecast.intraday, month) : null
 
     const s1Total = total(s1)
-    const s2Total = total(s2)
+    const s2Total = s2 ? total(s2) : 0
     const siTotal = si ? total(si) : 0
 
     return { key, dow, forecast, s1, s2, si, hasIntraday, s1Total, s2Total, siTotal, grandTotal: s1Total + s2Total + siTotal }
@@ -236,7 +239,14 @@ export function StaffPlanPage() {
       : 0
     return acc
   }, {} as StaffMap)
-  const avgS2 = { ...avgS1 }  // same as s1 (50/50)
+  const s2Rows = openRows.filter(r => r.s2 !== null)
+  const avgS2 = ROLES.reduce((acc, r) => {
+    acc[r] = s2Rows.length
+      ? Math.round(s2Rows.reduce((s, row) => s + (row.s2![r] ?? 0), 0) / s2Rows.length)
+      : 0
+    return acc
+  }, {} as StaffMap)
+  const avgS2Total = s2Rows.length ? Math.round(s2Rows.reduce((s, r) => s + r.s2Total, 0) / s2Rows.length) : 0
   const intradayRows = openRows.filter(r => r.hasIntraday)
   const avgSi = ROLES.reduce((acc, r) => {
     acc[r] = intradayRows.length
@@ -267,7 +277,7 @@ export function StaffPlanPage() {
             Σχεδιασμός Προσωπικού ανά Βάρδια
           </h1>
           <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
-            DD Βάρδια 1 (07–15) · DD Βάρδια 2 (13–21) · Intraday (18–02) — split 50/50
+            Δευ–Παρ: Β1 07–15 + Β2 13–21 + Intraday 18–02 · Σαβ: 09–17 (1 βάρδια) · Κυρ: 11–19 DD + Intraday 18–02
           </div>
         </div>
       </div>
@@ -306,7 +316,7 @@ export function StaffPlanPage() {
           color="#1D9E75"
           bg="#f0faf5"
           staff={avgS2}
-          avg={avgS1Total}
+          avg={avgS2Total}
         />
         {intradayRows.length > 0 && (
           <ShiftCard
@@ -389,7 +399,7 @@ export function StaffPlanPage() {
                       {isClosed ? '—' : row.s1Total}
                     </td>
                     <td style={{ padding: '8px 10px', textAlign: 'center', background: isClosed ? rowBg : '#f7fdf9', fontFamily: 'monospace', fontWeight: 600, color: '#1D9E75', fontSize: 14 }}>
-                      {isClosed ? '—' : row.s2Total}
+                      {isClosed || row.s2 === null ? '—' : row.s2Total}
                     </td>
                     <td style={{ padding: '8px 10px', textAlign: 'center', background: isClosed ? rowBg : '#faf9ff', fontFamily: 'monospace', fontWeight: 600, color: '#7F77DD', fontSize: 14 }}>
                       {isClosed ? '—' : row.hasIntraday ? row.siTotal : '—'}
@@ -419,7 +429,7 @@ export function StaffPlanPage() {
                           {/* DD Shift 1 */}
                           <div style={{ flex: 1, background: '#f0f6fe', borderRadius: 10, padding: '10px 12px' }}>
                             <div style={{ fontSize: 10, color: '#378ADD', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 8 }}>
-                              DD Βάρδια 1 · 07:00–15:00 · {fmt(Math.round(row.forecast.due_date / 2))} παρ.
+                              DD Βάρδια 1 · {isSat ? '09:00–17:00' : isSun ? '11:00–19:00' : '07:00–15:00'} · {fmt(isSat || isSun ? row.forecast.due_date : Math.round(row.forecast.due_date / 2))} παρ.
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6 }}>
                               {ROLES.map(r => (
@@ -431,7 +441,8 @@ export function StaffPlanPage() {
                             </div>
                           </div>
 
-                          {/* DD Shift 2 */}
+                          {/* DD Shift 2 — weekdays only */}
+                          {row.s2 && (
                           <div style={{ flex: 1, background: '#f0faf5', borderRadius: 10, padding: '10px 12px' }}>
                             <div style={{ fontSize: 10, color: '#1D9E75', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 8 }}>
                               DD Βάρδια 2 · 13:00–21:00 · {fmt(Math.round(row.forecast.due_date / 2))} παρ.
@@ -439,12 +450,13 @@ export function StaffPlanPage() {
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6 }}>
                               {ROLES.map(r => (
                                 <div key={r} style={{ textAlign: 'center', background: 'white', borderRadius: 8, padding: '6px 4px' }}>
-                                  <div style={{ fontSize: 16, fontWeight: 600, color: ROLE_COLORS[r], fontFamily: 'monospace' }}>{row.s2[r] ?? 0}</div>
+                                  <div style={{ fontSize: 16, fontWeight: 600, color: ROLE_COLORS[r], fontFamily: 'monospace' }}>{row.s2![r] ?? 0}</div>
                                   <div style={{ fontSize: 9, color: '#9ca3af' }}>{ROLE_LABELS[r]}</div>
                                 </div>
                               ))}
                             </div>
                           </div>
+                          )}
 
                           {/* Intraday */}
                           {row.hasIntraday && row.si && (
@@ -494,7 +506,7 @@ export function StaffPlanPage() {
       </div>
 
       <div style={{ marginTop: 10, fontSize: 11, color: '#9ca3af', textAlign: 'center' }}>
-        Κλίκ σε γραμμή για ανάλυση ανά ρόλο · Sorter/Transporter είναι σταθερά ανά βάρδια · DD split 50/50
+        Κλίκ σε γραμμή για ανάλυση ανά ρόλο · Σάββατο: 1 βάρδια 09–17 · Κυριακή: DD 11–19 + Intraday 18–02
       </div>
     </div>
   )
