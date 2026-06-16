@@ -35,6 +35,9 @@ export interface Employee {
   tertiary_role: EmployeeRole | null
   skill_level: SkillLevel
   current_status: EmployeeStatus
+  shift_team: 'A' | 'B' | null
+  flexibility: number | null
+  autonomy: number | null
   created_at: string
   updated_at: string
   // joined

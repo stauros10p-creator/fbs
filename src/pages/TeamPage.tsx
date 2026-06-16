@@ -78,33 +78,40 @@ function getAttendancePct(emp: Employee): number {
   return Math.round(85 + seededVal(empSeed(emp), 200) * 15)
 }
 function getReliability(emp: Employee): number {
+  // Seeded until we add a reliability column
   const offset = Math.round((seededVal(empSeed(emp), 301) - 0.5) * 2)
   return Math.max(1, Math.min(5, parseInt(emp.skill_level) + offset))
 }
 function getAutonomy(emp: Employee): number {
+  // Use real DB value if available, else seed
+  if (emp.autonomy != null) return Math.max(1, Math.min(5, emp.autonomy))
   const offset = Math.round((seededVal(empSeed(emp), 401) - 0.5) * 2)
   return Math.max(1, Math.min(5, parseInt(emp.skill_level) + offset))
 }
 function getRoleSkills(emp: Employee): { role: EmployeeRole; level: number }[] {
+  const primaryLevel = parseInt(emp.skill_level)
   const skills: { role: EmployeeRole; level: number }[] = [
-    { role: emp.primary_role, level: parseInt(emp.skill_level) },
+    { role: emp.primary_role, level: primaryLevel },
   ]
   if (emp.secondary_role && emp.secondary_role !== emp.primary_role) {
-    const offset = Math.floor(seededVal(empSeed(emp), 77) * 2.5)
-    skills.push({ role: emp.secondary_role, level: Math.max(1, parseInt(emp.skill_level) - offset) })
+    const offset = Math.floor(seededVal(empSeed(emp), 77) * 2)
+    skills.push({ role: emp.secondary_role, level: Math.max(1, primaryLevel - offset) })
   }
-  const s = empSeed(emp)
-  const extra = Math.floor(seededVal(s, 500) * 1.8)
-  const taken = new Set(skills.map(sk => sk.role))
-  const remaining = ALL_ROLES.filter(r => !taken.has(r))
-  for (let i = 0; i < extra && remaining.length > 0; i++) {
-    const idx = Math.floor(seededVal(s, 501 + i) * remaining.length) % remaining.length
-    skills.push({ role: remaining[idx], level: Math.floor(seededVal(s, 502 + i) * 2) + 1 })
-    remaining.splice(idx, 1)
+  if (emp.tertiary_role && emp.tertiary_role !== emp.primary_role && emp.tertiary_role !== emp.secondary_role) {
+    const offset = Math.floor(seededVal(empSeed(emp), 88) * 2) + 1
+    skills.push({ role: emp.tertiary_role, level: Math.max(1, primaryLevel - offset) })
   }
   return skills
 }
+function getShiftTeam(emp: Employee): string {
+  if (emp.shift_team === 'A') return 'Team A'
+  if (emp.shift_team === 'B') return 'Team B'
+  return '—'
+}
+
 function getFlexibility(emp: Employee): number {
+  // Use real DB value if available, else count roles
+  if (emp.flexibility != null) return Math.max(1, Math.min(5, emp.flexibility))
   return Math.min(5, getRoleSkills(emp).length)
 }
 function getWorkforceScore(emp: Employee): number {
@@ -113,17 +120,6 @@ function getWorkforceScore(emp: Employee): number {
   const aut  = getAutonomy(emp)
   const flex = getFlexibility(emp)
   return Math.round(prod * 0.40 + (rel/5*100) * 0.25 + (aut/5*100) * 0.20 + (flex/5*100) * 0.15)
-}
-function getTeam(emp: Employee): string {
-  const ab = empSeed(emp) % 2 === 0 ? 'A' : 'B'
-  switch (emp.primary_role) {
-    case 'picker':      return `Picking Team ${ab}`
-    case 'packer':      return `Packing Team ${ab}`
-    case 'operator':    return `Ops Team ${ab}`
-    case 'sorter':      return 'Sorting Team'
-    case 'transporter': return 'Transport Team'
-    default:            return `Team ${ab}`
-  }
 }
 function getHireDate(emp: Employee): string {
   const s = empSeed(emp)
@@ -308,7 +304,7 @@ function DetailPanel({ emp, weekShifts, todayIdx, onEdit, onBreak, onSick }: {
         )}
         <div className="text-xs text-slate-500">
           <span className="text-slate-400 mr-1">Team</span>
-          <span className="font-medium">{getTeam(emp)}</span>
+          <span className="font-medium">{getShiftTeam(emp)}</span>
         </div>
         <div className="font-mono text-xs text-slate-600">
           <span className="text-slate-400 mr-1">Shift</span>{shiftStr}
