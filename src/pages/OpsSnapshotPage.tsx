@@ -1,10 +1,11 @@
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { BarChart2, TrendingUp, Activity, Clock, type LucideIcon } from 'lucide-react'
+import { BarChart2, TrendingUp, Activity, Clock } from 'lucide-react'
+import type { FC, SVGProps } from 'react'
 
 interface ReportCard {
   to: string
-  Icon: LucideIcon
+  Icon: FC<SVGProps<SVGSVGElement> & { className?: string }>
   label: string
   description: string
   accent: string
