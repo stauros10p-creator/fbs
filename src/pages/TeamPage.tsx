@@ -122,8 +122,11 @@ function getWorkforceScore(emp: Employee): number {
   return Math.round(prod * 0.40 + (rel/5*100) * 0.25 + (aut/5*100) * 0.20 + (flex/5*100) * 0.15)
 }
 function getHireDate(emp: Employee): string {
-  const s = empSeed(emp)
-  return `${String((s%28)+1).padStart(2,'0')}/${String((s%12)+1).padStart(2,'0')}/${2019+(s%5)}`
+  if (emp.hire_date) {
+    const [y, m, d] = emp.hire_date.split('-')
+    return `${d}/${m}/${y}`
+  }
+  return '—'
 }
 function getHistory30(emp: Employee) {
   const seed = empSeed(emp); const now = new Date()

@@ -38,6 +38,7 @@ export interface Employee {
   shift_team: 'A' | 'B' | null
   flexibility: number | null
   autonomy: number | null
+  hire_date: string | null
   created_at: string
   updated_at: string
   // joined
