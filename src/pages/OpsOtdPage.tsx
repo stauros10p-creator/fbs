@@ -164,8 +164,8 @@ export function OpsOtdPage() {
   }
 
   const categories = [
-    { label: 'Multi',     todayVal: today?.POLIKES,    ystVal: yst?.POLIKES,    lwVal: lw?.POLIKES },
-    { label: 'Mono',      todayVal: today?.MONIKES,    ystVal: yst?.MONIKES,    lwVal: lw?.MONIKES },
+    { label: 'Πολυγραμμικές', todayVal: today?.POLIKES,    ystVal: yst?.POLIKES,    lwVal: lw?.POLIKES },
+    { label: 'Μονογραμμικές', todayVal: today?.MONIKES,    ystVal: yst?.MONIKES,    lwVal: lw?.MONIKES },
     { label: 'AutoStore', todayVal: today?.AUTOSTORE,  ystVal: yst?.AUTOSTORE,  lwVal: lw?.AUTOSTORE },
     { label: 'Ογκώδη',   todayVal: today?.OGKODH,     ystVal: yst?.OGKODH,     lwVal: lw?.OGKODH },
     { label: 'Gift',      todayVal: today?.GIFTORDERS, ystVal: yst?.GIFTORDERS, lwVal: lw?.GIFTORDERS },
@@ -295,8 +295,8 @@ export function OpsOtdPage() {
                 <div className="text-center text-[10px] text-muted uppercase tracking-wider">Last Week</div>
               </div>
 
-              <MetricRow label="Multi"     today={today?.POLIKES}    yst={yst?.POLIKES}    lw={lw?.POLIKES} />
-              <MetricRow label="Mono"      today={today?.MONIKES}    yst={yst?.MONIKES}    lw={lw?.MONIKES} />
+              <MetricRow label="Πολυγραμμικές" today={today?.POLIKES}    yst={yst?.POLIKES}    lw={lw?.POLIKES} />
+              <MetricRow label="Μονογραμμικές" today={today?.MONIKES}    yst={yst?.MONIKES}    lw={lw?.MONIKES} />
               <MetricRow label="AutoStore" today={today?.AUTOSTORE}  yst={yst?.AUTOSTORE}  lw={lw?.AUTOSTORE} />
               <MetricRow label="Ογκώδη"   today={today?.OGKODH}     yst={yst?.OGKODH}     lw={lw?.OGKODH} />
               <MetricRow label="Gift"      today={today?.GIFTORDERS} yst={yst?.GIFTORDERS} lw={lw?.GIFTORDERS} />
