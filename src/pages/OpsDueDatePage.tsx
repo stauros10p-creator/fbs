@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
-import { RefreshCw, ArrowLeft, CheckCircle, Clock } from 'lucide-react'
+import { RefreshCw, ArrowLeft, CheckCircle, Clock, X } from 'lucide-react'
 
 interface CompletedRow {
   DUEDATE: string
@@ -22,11 +22,19 @@ interface PendingRow {
   MONIKES:   number | null
 }
 
+interface OrderRow {
+  ORDERID:  string | number
+  DUEDATE:  string
+  DONEDATE: string
+}
+
 interface DueDateSnapshot {
   id:              number
   generated_at:    string
   completed_today: CompletedRow[]
   pending:         PendingRow[]
+  late_orders:     OrderRow[]
+  ontime_orders:   OrderRow[]
 }
 
 function fmt(n: number | null | undefined) {
@@ -47,11 +55,64 @@ function isOverdue(dateStr: string): boolean {
   return dateStr < new Date().toISOString().slice(0, 10)
 }
 
+// ── Modal ──────────────────────────────────────────────────────────────────────
+function OrderModal({
+  title, orders, onClose, accentColor
+}: {
+  title: string
+  orders: OrderRow[]
+  onClose: () => void
+  accentColor: string
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={onClose} />
+
+      {/* Panel */}
+      <div className="relative bg-white rounded-2xl shadow-xl border border-border w-full max-w-lg flex flex-col max-h-[80vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
+          <div>
+            <div className={cn('text-sm font-bold', accentColor)}>{title}</div>
+            <div className="text-xs text-muted mt-0.5">{orders.length.toLocaleString('el-GR')} παραγγελίες</div>
+          </div>
+          <button onClick={onClose} className="text-muted hover:text-slate-700 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Table header */}
+        <div className="grid grid-cols-3 px-5 py-2 bg-slate-50 border-b border-border text-[11px] text-muted uppercase tracking-wider flex-shrink-0">
+          <div>Order ID</div>
+          <div className="text-center">Due Date</div>
+          <div className="text-center">Done Date</div>
+        </div>
+
+        {/* Scrollable list */}
+        <div className="overflow-y-auto flex-1">
+          {orders.map((o, i) => (
+            <div key={i} className="grid grid-cols-3 px-5 py-2 border-b border-border/50 hover:bg-slate-50 text-sm">
+              <div className="font-mono font-semibold text-slate-800">{o.ORDERID}</div>
+              <div className="text-center font-mono text-slate-600">{o.DUEDATE}</div>
+              <div className="text-center font-mono text-slate-500">{o.DONEDATE}</div>
+            </div>
+          ))}
+          {orders.length === 0 && (
+            <div className="text-center py-10 text-muted text-sm">Δεν υπάρχουν δεδομένα</div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function OpsDueDatePage() {
   const navigate = useNavigate()
-  const [snapshot, setSnapshot] = useState<DueDateSnapshot | null>(null)
-  const [loading, setLoading]   = useState(true)
+  const [snapshot, setSnapshot]     = useState<DueDateSnapshot | null>(null)
+  const [loading, setLoading]       = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [modal, setModal]           = useState<'ontime' | 'late' | null>(null)
 
   async function load(showRefresh = false) {
     if (showRefresh) setRefreshing(true)
@@ -69,8 +130,10 @@ export function OpsDueDatePage() {
 
   useEffect(() => { load() }, [])
 
-  const completed = snapshot?.completed_today ?? []
-  const pending   = snapshot?.pending ?? []
+  const completed    = snapshot?.completed_today ?? []
+  const pending      = snapshot?.pending ?? []
+  const lateOrders   = snapshot?.late_orders ?? []
+  const ontimeOrders = snapshot?.ontime_orders ?? []
 
   const totalCompleted = completed.reduce((s, r) => s + (r.TOTAL ?? 0), 0)
   const totalOnTime    = completed.reduce((s, r) => s + (r.ONTIME ?? 0) + (r.EARLY ?? 0), 0)
@@ -102,7 +165,7 @@ export function OpsDueDatePage() {
 
         {!loading && !snapshot && (
           <div className="text-center py-20 text-muted text-sm">
-            No data. Run the script first, then create the Supabase table.
+            No data. Run the script first.
           </div>
         )}
 
@@ -110,19 +173,49 @@ export function OpsDueDatePage() {
           <>
             <div className="text-xs text-muted font-mono">⏱ {snapshot.generated_at}</div>
 
-            {/* KPI row */}
+            {/* KPI cards — Εγκαίρως & Με καθυστέρηση are clickable */}
             <div className="grid grid-cols-4 gap-4">
-              {[
-                { label: 'Ολοκληρωμένες σήμερα', val: fmt(totalCompleted), color: 'text-slate-800' },
-                { label: 'Εγκαίρως',  val: fmt(totalOnTime), color: 'text-green-500' },
-                { label: 'Με καθυστέρηση', val: fmt(totalLate), color: totalLate > 0 ? 'text-red-500' : 'text-muted' },
-                { label: 'Εκκρεμείς', val: fmt(totalPending), color: totalPending > 0 ? 'text-orange-500' : 'text-muted' },
-              ].map(k => (
-                <div key={k.label} className="panel text-center">
-                  <div className="text-xs text-muted uppercase tracking-widest mb-1">{k.label}</div>
-                  <div className={cn('text-2xl font-bold font-mono', k.color)}>{k.val}</div>
+              <div className="panel text-center">
+                <div className="text-xs text-muted uppercase tracking-widest mb-1">Ολοκληρωμένες σήμερα</div>
+                <div className="text-2xl font-bold font-mono text-slate-800">{fmt(totalCompleted)}</div>
+              </div>
+
+              <button
+                onClick={() => ontimeOrders.length > 0 && setModal('ontime')}
+                className={cn(
+                  'panel text-center transition-all border border-border',
+                  ontimeOrders.length > 0 ? 'cursor-pointer hover:border-green-400/50 hover:bg-green-50/30' : 'cursor-default'
+                )}
+              >
+                <div className="text-xs text-muted uppercase tracking-widest mb-1">Εγκαίρως</div>
+                <div className="text-2xl font-bold font-mono text-green-500">{fmt(totalOnTime)}</div>
+                {ontimeOrders.length > 0 && (
+                  <div className="text-[10px] text-green-400 mt-1">κλικ για λίστα →</div>
+                )}
+              </button>
+
+              <button
+                onClick={() => lateOrders.length > 0 && setModal('late')}
+                className={cn(
+                  'panel text-center transition-all border border-border',
+                  lateOrders.length > 0 ? 'cursor-pointer hover:border-red-400/50 hover:bg-red-50/30' : 'cursor-default'
+                )}
+              >
+                <div className="text-xs text-muted uppercase tracking-widest mb-1">Με καθυστέρηση</div>
+                <div className={cn('text-2xl font-bold font-mono', totalLate > 0 ? 'text-red-500' : 'text-muted')}>
+                  {fmt(totalLate)}
                 </div>
-              ))}
+                {lateOrders.length > 0 && (
+                  <div className="text-[10px] text-red-400 mt-1">κλικ για λίστα →</div>
+                )}
+              </button>
+
+              <div className="panel text-center">
+                <div className="text-xs text-muted uppercase tracking-widest mb-1">Εκκρεμείς</div>
+                <div className={cn('text-2xl font-bold font-mono', totalPending > 0 ? 'text-orange-500' : 'text-muted')}>
+                  {fmt(totalPending)}
+                </div>
+              </div>
             </div>
 
             {/* OTD % overall */}
@@ -130,7 +223,7 @@ export function OpsDueDatePage() {
               <div className="panel flex items-center gap-4">
                 <CheckCircle className={cn('w-5 h-5', overallOtd >= 95 ? 'text-green-500' : overallOtd >= 85 ? 'text-orange-400' : 'text-red-500')} />
                 <div>
-                  <div className="text-xs text-muted uppercase tracking-wider">OTD σήμερα (On Time + Νωρίς)</div>
+                  <div className="text-xs text-muted uppercase tracking-wider">OTD σήμερα (Εγκαίρως + Νωρίς)</div>
                   <div className={cn('text-2xl font-bold', overallOtd >= 95 ? 'text-green-500' : overallOtd >= 85 ? 'text-orange-400' : 'text-red-500')}>
                     {overallOtd}%
                   </div>
@@ -141,7 +234,7 @@ export function OpsDueDatePage() {
               </div>
             )}
 
-            {/* ── Section 1: Completed today ── */}
+            {/* Completed table */}
             <div className="panel p-0 overflow-hidden">
               <div className="px-5 py-3 bg-slate-50 border-b border-border flex items-center gap-2">
                 <CheckCircle className="w-4 h-4 text-green-500" />
@@ -165,7 +258,7 @@ export function OpsDueDatePage() {
                     <tr><td colSpan={6} className="text-center py-8 text-muted text-xs">Δεν υπάρχουν δεδομένα</td></tr>
                   )}
                   {completed.map(row => {
-                    const pct = otdPct(row)
+                    const pct  = otdPct(row)
                     const late = row.LATE ?? 0
                     return (
                       <tr key={row.DUEDATE} className="border-b border-border/50 hover:bg-slate-50">
@@ -194,7 +287,6 @@ export function OpsDueDatePage() {
                       </tr>
                     )
                   })}
-                  {/* Σύνολο */}
                   {completed.length > 1 && (
                     <tr className="bg-slate-50 border-t border-border font-semibold">
                       <td className="px-5 py-2 text-slate-700">Σύνολο</td>
@@ -218,7 +310,7 @@ export function OpsDueDatePage() {
               </table>
             </div>
 
-            {/* ── Section 2: Pending / Overdue ── */}
+            {/* Pending table */}
             <div className="panel p-0 overflow-hidden">
               <div className="px-5 py-3 bg-slate-50 border-b border-border flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -299,6 +391,24 @@ export function OpsDueDatePage() {
           </>
         )}
       </div>
+
+      {/* Modals */}
+      {modal === 'ontime' && (
+        <OrderModal
+          title="Εγκαίρως — Order IDs"
+          orders={ontimeOrders}
+          onClose={() => setModal(null)}
+          accentColor="text-green-600"
+        />
+      )}
+      {modal === 'late' && (
+        <OrderModal
+          title="Με καθυστέρηση — Order IDs"
+          orders={lateOrders}
+          onClose={() => setModal(null)}
+          accentColor="text-red-500"
+        />
+      )}
     </div>
   )
 }
