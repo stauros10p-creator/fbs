@@ -6,20 +6,20 @@ import { cn } from '@/lib/utils'
 import { RefreshCw, ArrowLeft, CheckCircle, Clock } from 'lucide-react'
 
 interface CompletedRow {
-  DueDate: string
-  OnTime: number | null
-  Early:  number | null
-  Late:   number | null
-  Total:  number | null
+  DUEDATE: string
+  ONTIME:  number | null
+  EARLY:   number | null
+  LATE:    number | null
+  TOTAL:   number | null
 }
 
 interface PendingRow {
-  DueDate:   string
-  Pending:   number | null
-  IntraDay:  number | null
-  AutoStore: number | null
-  Polikes:   number | null
-  Monikes:   number | null
+  DUEDATE:   string
+  PENDING:   number | null
+  INTRADAY:  number | null
+  AUTOSTORE: number | null
+  POLIKES:   number | null
+  MONIKES:   number | null
 }
 
 interface DueDateSnapshot {
@@ -35,8 +35,8 @@ function fmt(n: number | null | undefined) {
 }
 
 function otdPct(row: CompletedRow): number | null {
-  if (!row.Total) return null
-  return Math.round(((row.OnTime ?? 0) + (row.Early ?? 0)) / row.Total * 100)
+  if (!row.TOTAL) return null
+  return Math.round(((row.ONTIME ?? 0) + (row.EARLY ?? 0)) / row.TOTAL * 100)
 }
 
 function isToday(dateStr: string): boolean {
@@ -72,11 +72,11 @@ export function OpsDueDatePage() {
   const completed = snapshot?.completed_today ?? []
   const pending   = snapshot?.pending ?? []
 
-  const totalCompleted = completed.reduce((s, r) => s + (r.Total ?? 0), 0)
-  const totalOnTime    = completed.reduce((s, r) => s + (r.OnTime ?? 0) + (r.Early ?? 0), 0)
-  const totalLate      = completed.reduce((s, r) => s + (r.Late ?? 0), 0)
-  const totalPending   = pending.reduce((s, r) => s + (r.Pending ?? 0), 0)
-  const totalOverdue   = pending.filter(r => isOverdue(r.DueDate)).reduce((s, r) => s + (r.Pending ?? 0), 0)
+  const totalCompleted = completed.reduce((s, r) => s + (r.TOTAL ?? 0), 0)
+  const totalOnTime    = completed.reduce((s, r) => s + (r.ONTIME ?? 0) + (r.EARLY ?? 0), 0)
+  const totalLate      = completed.reduce((s, r) => s + (r.LATE ?? 0), 0)
+  const totalPending   = pending.reduce((s, r) => s + (r.PENDING ?? 0), 0)
+  const totalOverdue   = pending.filter(r => isOverdue(r.DUEDATE)).reduce((s, r) => s + (r.PENDING ?? 0), 0)
   const overallOtd     = totalCompleted ? Math.round((totalOnTime / totalCompleted) * 100) : null
 
   return (
@@ -166,20 +166,20 @@ export function OpsDueDatePage() {
                   )}
                   {completed.map(row => {
                     const pct = otdPct(row)
-                    const late = row.Late ?? 0
+                    const late = row.LATE ?? 0
                     return (
-                      <tr key={row.DueDate} className="border-b border-border/50 hover:bg-slate-50">
+                      <tr key={row.DUEDATE} className="border-b border-border/50 hover:bg-slate-50">
                         <td className="px-5 py-2.5 font-mono text-slate-700 font-medium">
-                          {row.DueDate}
-                          {isToday(row.DueDate) && (
+                          {row.DUEDATE}
+                          {isToday(row.DUEDATE) && (
                             <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded font-sans">σήμερα</span>
                           )}
                         </td>
-                        <td className="px-5 py-2.5 text-right font-mono font-semibold text-slate-800">{fmt(row.Total)}</td>
-                        <td className="px-5 py-2.5 text-right font-mono text-green-500">{fmt(row.OnTime)}</td>
-                        <td className="px-5 py-2.5 text-right font-mono text-blue-500">{fmt(row.Early)}</td>
+                        <td className="px-5 py-2.5 text-right font-mono font-semibold text-slate-800">{fmt(row.TOTAL)}</td>
+                        <td className="px-5 py-2.5 text-right font-mono text-green-500">{fmt(row.ONTIME)}</td>
+                        <td className="px-5 py-2.5 text-right font-mono text-blue-500">{fmt(row.EARLY)}</td>
                         <td className={cn('px-5 py-2.5 text-right font-mono font-semibold', late > 0 ? 'text-red-500' : 'text-muted')}>
-                          {fmt(row.Late)}
+                          {fmt(row.LATE)}
                         </td>
                         <td className="px-5 py-2.5 text-right">
                           {pct !== null && (
@@ -251,25 +251,25 @@ export function OpsDueDatePage() {
                     </td></tr>
                   )}
                   {pending.map(row => {
-                    const overdue = isOverdue(row.DueDate)
-                    const today   = isToday(row.DueDate)
+                    const overdue = isOverdue(row.DUEDATE)
+                    const today   = isToday(row.DUEDATE)
                     return (
-                      <tr key={row.DueDate} className={cn(
+                      <tr key={row.DUEDATE} className={cn(
                         'border-b border-border/50',
                         overdue ? 'bg-red-50/40 hover:bg-red-50' : 'hover:bg-slate-50'
                       )}>
                         <td className="px-5 py-2.5 font-mono font-medium">
-                          <span className={overdue ? 'text-red-500' : 'text-slate-700'}>{row.DueDate}</span>
+                          <span className={overdue ? 'text-red-500' : 'text-slate-700'}>{row.DUEDATE}</span>
                           {overdue && <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-red-100 text-red-500 rounded font-sans">χρεωστ.</span>}
                           {today  && <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-orange-100 text-orange-500 rounded font-sans">σήμερα</span>}
                         </td>
                         <td className={cn('px-5 py-2.5 text-right font-mono font-bold', overdue ? 'text-red-500' : 'text-slate-800')}>
-                          {fmt(row.Pending)}
+                          {fmt(row.PENDING)}
                         </td>
-                        <td className="px-5 py-2.5 text-right font-mono text-slate-600">{fmt(row.IntraDay)}</td>
-                        <td className="px-5 py-2.5 text-right font-mono text-slate-600">{fmt(row.AutoStore)}</td>
-                        <td className="px-5 py-2.5 text-right font-mono text-slate-600">{fmt(row.Polikes)}</td>
-                        <td className="px-5 py-2.5 text-right font-mono text-slate-600">{fmt(row.Monikes)}</td>
+                        <td className="px-5 py-2.5 text-right font-mono text-slate-600">{fmt(row.INTRADAY)}</td>
+                        <td className="px-5 py-2.5 text-right font-mono text-slate-600">{fmt(row.AUTOSTORE)}</td>
+                        <td className="px-5 py-2.5 text-right font-mono text-slate-600">{fmt(row.POLIKES)}</td>
+                        <td className="px-5 py-2.5 text-right font-mono text-slate-600">{fmt(row.MONIKES)}</td>
                       </tr>
                     )
                   })}
@@ -280,16 +280,16 @@ export function OpsDueDatePage() {
                         {fmt(totalPending)}
                       </td>
                       <td className="px-5 py-2 text-right font-mono text-slate-500">
-                        {fmt(pending.reduce((s, r) => s + (r.IntraDay ?? 0), 0))}
+                        {fmt(pending.reduce((s, r) => s + (r.INTRADAY ?? 0), 0))}
                       </td>
                       <td className="px-5 py-2 text-right font-mono text-slate-500">
-                        {fmt(pending.reduce((s, r) => s + (r.AutoStore ?? 0), 0))}
+                        {fmt(pending.reduce((s, r) => s + (r.AUTOSTORE ?? 0), 0))}
                       </td>
                       <td className="px-5 py-2 text-right font-mono text-slate-500">
-                        {fmt(pending.reduce((s, r) => s + (r.Polikes ?? 0), 0))}
+                        {fmt(pending.reduce((s, r) => s + (r.POLIKES ?? 0), 0))}
                       </td>
                       <td className="px-5 py-2 text-right font-mono text-slate-500">
-                        {fmt(pending.reduce((s, r) => s + (r.Monikes ?? 0), 0))}
+                        {fmt(pending.reduce((s, r) => s + (r.MONIKES ?? 0), 0))}
                       </td>
                     </tr>
                   )}
