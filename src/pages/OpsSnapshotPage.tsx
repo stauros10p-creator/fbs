@@ -1,8 +1,18 @@
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { BarChart2, TrendingUp, Activity, Clock } from 'lucide-react'
+import { BarChart2, TrendingUp, Activity, Clock, type LucideIcon } from 'lucide-react'
 
-const REPORTS = [
+interface ReportCard {
+  to: string
+  Icon: LucideIcon
+  label: string
+  description: string
+  accent: string
+  border: string
+  disabled?: boolean
+}
+
+const REPORTS: ReportCard[] = [
   {
     to: '/ops/otd',
     Icon: TrendingUp,
