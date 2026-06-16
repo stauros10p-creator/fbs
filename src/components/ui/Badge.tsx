@@ -35,10 +35,11 @@ export function RoleBadge({ role }: { role: string }) {
     validator: 'purple', sorter: 'yellow', transporter: 'cyan',
   }
   const labels: Record<string, string> = {
-    operator: 'OP', picker: 'PK', packer: 'PA',
-    validator: 'VA', sorter: 'SO', transporter: 'TR',
+    operator: 'Operator', picker: 'Picker', packer: 'Packer',
+    validator: 'Validator', sorter: 'Sorter', transporter: 'Transporter',
+    team_leader: 'Team Leader',
   }
-  return <Badge variant={map[role] ?? 'muted'}>{labels[role] ?? role.toUpperCase().slice(0, 2)}</Badge>
+  return <Badge variant={map[role] ?? 'muted'}>{labels[role] ?? role}</Badge>
 }
 
 export function StatusBadge({ status }: { status: string }) {
