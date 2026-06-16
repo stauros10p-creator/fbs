@@ -15,7 +15,7 @@ export function PageHeader({ title, subtitle, accent, actions, className }: Page
         {accent && (
           <div className="text-xs font-mono tracking-widest text-muted uppercase mb-1">{accent}</div>
         )}
-        <h1 className="font-sans font-bold tracking-tight text-3xl font-bold text-slate-100 leading-none">{title}</h1>
+        <h1 className="font-sans font-bold tracking-tight text-3xl font-bold text-slate-800 leading-none">{title}</h1>
         {subtitle && (
           <p className="text-sm text-muted mt-2">{subtitle}</p>
         )}
