@@ -25,7 +25,7 @@ interface PendingRow {
 interface OrderRow {
   ORDERID:  string | number
   DUEDATE:  string
-  DONEDATE: string
+  DONEDATE?: string | null
 }
 
 interface DueDateSnapshot {
@@ -35,6 +35,7 @@ interface DueDateSnapshot {
   pending:         PendingRow[]
   late_orders:     OrderRow[]
   ontime_orders:   OrderRow[]
+  pending_orders:  OrderRow[]
 }
 
 function fmt(n: number | null | undefined) {
@@ -44,7 +45,11 @@ function fmt(n: number | null | undefined) {
 
 function otdPct(row: CompletedRow): number | null {
   if (!row.TOTAL) return null
-  return Math.round(((row.ONTIME ?? 0) + (row.EARLY ?? 0)) / row.TOTAL * 100)
+  return parseFloat((((row.ONTIME ?? 0) + (row.EARLY ?? 0)) / row.TOTAL * 100).toFixed(2))
+}
+
+function fmtPct(n: number): string {
+  return n.toFixed(2) + '%'
 }
 
 function isToday(dateStr: string): boolean {
@@ -95,7 +100,7 @@ function OrderModal({
             <div key={i} className="grid grid-cols-3 px-5 py-2 border-b border-border/50 hover:bg-slate-50 text-sm">
               <div className="font-mono font-semibold text-slate-800">{o.ORDERID}</div>
               <div className="text-center font-mono text-slate-600">{o.DUEDATE}</div>
-              <div className="text-center font-mono text-slate-500">{o.DONEDATE}</div>
+              <div className="text-center font-mono text-slate-500">{o.DONEDATE ?? '—'}</div>
             </div>
           ))}
           {orders.length === 0 && (
@@ -112,7 +117,7 @@ export function OpsDueDatePage() {
   const [snapshot, setSnapshot]     = useState<DueDateSnapshot | null>(null)
   const [loading, setLoading]       = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [modal, setModal]           = useState<'ontime' | 'late' | null>(null)
+  const [modal, setModal]           = useState<'ontime' | 'late' | 'pending' | null>(null)
 
   async function load(showRefresh = false) {
     if (showRefresh) setRefreshing(true)
@@ -132,15 +137,16 @@ export function OpsDueDatePage() {
 
   const completed    = snapshot?.completed_today ?? []
   const pending      = snapshot?.pending ?? []
-  const lateOrders   = snapshot?.late_orders ?? []
-  const ontimeOrders = snapshot?.ontime_orders ?? []
+  const lateOrders    = snapshot?.late_orders ?? []
+  const ontimeOrders  = snapshot?.ontime_orders ?? []
+  const pendingOrders = snapshot?.pending_orders ?? []
 
   const totalCompleted = completed.reduce((s, r) => s + (r.TOTAL ?? 0), 0)
   const totalOnTime    = completed.reduce((s, r) => s + (r.ONTIME ?? 0) + (r.EARLY ?? 0), 0)
   const totalLate      = completed.reduce((s, r) => s + (r.LATE ?? 0), 0)
   const totalPending   = pending.reduce((s, r) => s + (r.PENDING ?? 0), 0)
   const totalOverdue   = pending.filter(r => isOverdue(r.DUEDATE)).reduce((s, r) => s + (r.PENDING ?? 0), 0)
-  const overallOtd     = totalCompleted ? Math.round((totalOnTime / totalCompleted) * 100) : null
+  const overallOtd     = totalCompleted ? parseFloat(((totalOnTime / totalCompleted) * 100).toFixed(2)) : null
 
   return (
     <div className="min-h-full">
@@ -210,12 +216,21 @@ export function OpsDueDatePage() {
                 )}
               </button>
 
-              <div className="panel text-center">
+              <button
+                onClick={() => pendingOrders.length > 0 && setModal('pending')}
+                className={cn(
+                  'panel text-center transition-all border border-border',
+                  pendingOrders.length > 0 ? 'cursor-pointer hover:border-orange-400/50 hover:bg-orange-50/30' : 'cursor-default'
+                )}
+              >
                 <div className="text-xs text-muted uppercase tracking-widest mb-1">Εκκρεμείς</div>
                 <div className={cn('text-2xl font-bold font-mono', totalPending > 0 ? 'text-orange-500' : 'text-muted')}>
                   {fmt(totalPending)}
                 </div>
-              </div>
+                {pendingOrders.length > 0 && (
+                  <div className="text-[10px] text-orange-400 mt-1">κλικ για λίστα →</div>
+                )}
+              </button>
             </div>
 
             {/* OTD % overall */}
@@ -225,7 +240,7 @@ export function OpsDueDatePage() {
                 <div>
                   <div className="text-xs text-muted uppercase tracking-wider">OTD σήμερα (Εγκαίρως + Νωρίς)</div>
                   <div className={cn('text-2xl font-bold', overallOtd >= 95 ? 'text-green-500' : overallOtd >= 85 ? 'text-orange-400' : 'text-red-500')}>
-                    {overallOtd}%
+                    {fmtPct(overallOtd)}
                   </div>
                 </div>
                 <div className="ml-auto text-xs text-muted">
@@ -281,7 +296,7 @@ export function OpsDueDatePage() {
                               pct >= 95 ? 'bg-green-100 text-green-600' :
                               pct >= 85 ? 'bg-orange-100 text-orange-500' :
                               'bg-red-100 text-red-500'
-                            )}>{pct}%</span>
+                            )}>{fmtPct(pct)}</span>
                           )}
                         </td>
                       </tr>
@@ -301,7 +316,7 @@ export function OpsDueDatePage() {
                             overallOtd >= 95 ? 'bg-green-100 text-green-600' :
                             overallOtd >= 85 ? 'bg-orange-100 text-orange-500' :
                             'bg-red-100 text-red-500'
-                          )}>{overallOtd}%</span>
+                          )}>{fmtPct(overallOtd)}</span>
                         )}
                       </td>
                     </tr>
@@ -407,6 +422,14 @@ export function OpsDueDatePage() {
           orders={lateOrders}
           onClose={() => setModal(null)}
           accentColor="text-red-500"
+        />
+      )}
+      {modal === 'pending' && (
+        <OrderModal
+          title="Εκκρεμείς — Order IDs"
+          orders={pendingOrders}
+          onClose={() => setModal(null)}
+          accentColor="text-orange-500"
         />
       )}
     </div>
