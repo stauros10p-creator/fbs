@@ -5,6 +5,10 @@ import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { RefreshCw, ArrowLeft, CheckCircle, Clock, X } from 'lucide-react'
 import { HistoryPicker } from '@/components/ui/HistoryPicker'
+import {
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, ReferenceLine, ResponsiveContainer, Legend,
+} from 'recharts'
 
 interface CompletedRow {
   DUEDATE: string
@@ -181,6 +185,55 @@ export function OpsDueDatePage() {
         {!loading && snapshot && (
           <>
             <div className="text-xs text-muted font-mono">⏱ {snapshot.generated_at}</div>
+
+            {/* Chart — Bar (σύνολο) + Line (OTD%) ανά Due Date */}
+            {completed.length > 0 && (() => {
+              const OTD_TARGET = 99.3
+              const chartData = [...completed]
+                .sort((a, b) => a.DUEDATE.localeCompare(b.DUEDATE))
+                .map(r => {
+                  const total = r.TOTAL ?? 0
+                  const good  = (r.ONTIME ?? 0) + (r.EARLY ?? 0)
+                  const pct   = total > 0 ? parseFloat((good / total * 100).toFixed(2)) : null
+                  return {
+                    date: r.DUEDATE.slice(5).replace('-', '/'), // MM/DD
+                    Σύνολο: total,
+                    'OTD %': pct,
+                  }
+                })
+              return (
+                <div className="panel">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="text-xs font-bold tracking-widest text-muted uppercase">OTD % ανά Due Date</div>
+                    <div className="flex items-center gap-4 text-xs text-muted">
+                      <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-blue-200" />Σύνολο</span>
+                      <span className="flex items-center gap-1.5"><span className="inline-block w-6 h-0.5 bg-green-500" />OTD %</span>
+                      <span className="flex items-center gap-1.5"><span className="inline-block w-6 h-0.5 bg-red-400 border-dashed border-t-2" />Στόχος {OTD_TARGET}%</span>
+                    </div>
+                  </div>
+                  <ResponsiveContainer width="100%" height={240}>
+                    <ComposedChart data={chartData} margin={{ top: 4, right: 16, bottom: 0, left: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e6ef" vertical={false} />
+                      <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                      <YAxis yAxisId="left" tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} width={45}
+                        tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(1)}k` : String(v)} />
+                      <YAxis yAxisId="right" orientation="right" domain={[95, 100]} tick={{ fontSize: 11, fill: '#9ca3af' }}
+                        axisLine={false} tickLine={false} width={40} tickFormatter={v => `${v}%`} />
+                      <Tooltip
+                        contentStyle={{ fontSize: 12, border: '1px solid #e2e6ef', borderRadius: 8 }}
+                        formatter={(v: number, name: string) =>
+                          name === 'OTD %' ? `${v}%` : v.toLocaleString('el-GR')
+                        }
+                      />
+                      <ReferenceLine yAxisId="right" y={OTD_TARGET} stroke="#f87171" strokeDasharray="5 4" strokeWidth={1.5} />
+                      <Bar yAxisId="left" dataKey="Σύνολο" fill="#bfdbfe" radius={[3,3,0,0]} />
+                      <Line yAxisId="right" type="monotone" dataKey="OTD %" stroke="#22c55e" strokeWidth={2}
+                        dot={{ r: 4, fill: '#22c55e' }} activeDot={{ r: 5 }} connectNulls />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              )
+            })()}
 
             {/* KPI cards — Εγκαίρως & Με καθυστέρηση are clickable */}
             <div className="grid grid-cols-4 gap-4">
