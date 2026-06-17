@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
-import { RefreshCw, ArrowLeft } from 'lucide-react'
+import { RefreshCw, ArrowLeft, X } from 'lucide-react'
 import { HistoryPicker } from '@/components/ui/HistoryPicker'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -16,27 +16,37 @@ interface InboundRow {
   PUTAWAYQTY: number | null
 }
 
+interface DetailRow {
+  WRA: string
+  TRANSTYPE: string   // 'Inbound' | 'Putaway'
+  ITEMCODE: string
+  QTY: number
+  LINES: number
+}
+
 interface Snapshot {
   id: number
   generated_at: string
   date_from: string
   date_to: string
   rows: InboundRow[]
+  detail_rows: DetailRow[]
 }
 
 function diffColor(v: number | null) {
   if (v === null) return 'text-muted'
-  if (v < 0) return 'text-red-500'   // more put away than received (unusual)
-  if (v > 0) return 'text-orange-500' // backlog waiting to be put away
+  if (v < 0) return 'text-red-500'
+  if (v > 0) return 'text-orange-500'
   return 'text-muted'
 }
 
 export function OpsInboundPage() {
   const navigate = useNavigate()
-  const [snapshot, setSnapshot]     = useState<Snapshot | null>(null)
-  const [loading, setLoading]       = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
+  const [snapshot, setSnapshot]       = useState<Snapshot | null>(null)
+  const [loading, setLoading]         = useState(true)
+  const [refreshing, setRefreshing]   = useState(false)
   const [historyDate, setHistoryDate] = useState('')
+  const [selectedHour, setSelectedHour] = useState<string | null>(null)
 
   async function load(showRefresh = false, date = historyDate) {
     if (showRefresh) setRefreshing(true)
@@ -57,20 +67,26 @@ export function OpsInboundPage() {
 
   useEffect(() => { load(false, historyDate) }, [historyDate])
 
-  const rows = snapshot?.rows ?? []
+  const rows       = snapshot?.rows ?? []
   const hourlyRows = rows.filter(r => r.WRA !== 'Synolo')
   const totalRow   = rows.find(r => r.WRA === 'Synolo')
+  const detailRows = snapshot?.detail_rows ?? []
 
   const chartData = hourlyRows.map(r => ({
-    hour:      r.WRA,
-    Inbound:   r.INBOUNDQTY ?? 0,
-    Putaway:   r.PUTAWAYQTY ?? 0,
-    Διαφορά:  (r.INBOUNDQTY ?? 0) - (r.PUTAWAYQTY ?? 0),
+    hour:     r.WRA,
+    Inbound:  r.INBOUNDQTY ?? 0,
+    Putaway:  r.PUTAWAYQTY ?? 0,
+    Διαφορά: (r.INBOUNDQTY ?? 0) - (r.PUTAWAYQTY ?? 0),
   }))
 
   const totalInbound = totalRow?.INBOUNDQTY ?? null
   const totalPutaway = totalRow?.PUTAWAYQTY ?? null
   const gap = totalInbound !== null && totalPutaway !== null ? totalInbound - totalPutaway : null
+
+  // Detail modal data
+  const hourKey = selectedHour?.split('-')[0]  // e.g. "09" from "09-10"
+  const modalInbound = detailRows.filter(r => r.WRA === hourKey && r.TRANSTYPE === 'Inbound')
+  const modalPutaway = detailRows.filter(r => r.WRA === hourKey && r.TRANSTYPE === 'Putaway')
 
   return (
     <div className="min-h-full">
@@ -137,7 +153,6 @@ export function OpsInboundPage() {
                     <Tooltip
                       contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e6ef' }}
                       formatter={(val: number, name: string) => [val.toLocaleString('el-GR'), name]}
-                      itemSorter={item => -(item.value as number)}
                     />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
                     <Line type="monotone" dataKey="Inbound" stroke="#f97316" strokeWidth={2} dot={false} />
@@ -175,19 +190,107 @@ export function OpsInboundPage() {
                   <tbody>
                     {hourlyRows.map((row, i) => {
                       const rowGap = (row.INBOUNDQTY ?? 0) - (row.PUTAWAYQTY ?? 0)
+                      const isSelected = selectedHour === row.WRA
                       return (
-                        <tr key={i} className="border-b border-border/50 hover:bg-slate-50">
-                          <td className="px-5 py-2 font-mono text-slate-700">{row.WRA}</td>
-                          <td className="px-5 py-2 text-right font-mono text-orange-500">
-                            {row.INBOUNDQTY !== null ? row.INBOUNDQTY.toLocaleString('el-GR') : '—'}
-                          </td>
-                          <td className="px-5 py-2 text-right font-mono text-purple-500">
-                            {row.PUTAWAYQTY !== null ? row.PUTAWAYQTY.toLocaleString('el-GR') : '—'}
-                          </td>
-                          <td className={cn('px-5 py-2 text-right font-mono font-semibold', diffColor(rowGap))}>
-                            {rowGap !== 0 ? rowGap.toLocaleString('el-GR') : '—'}
-                          </td>
-                        </tr>
+                        <>
+                          <tr
+                            key={i}
+                            onClick={() => setSelectedHour(isSelected ? null : row.WRA)}
+                            className={cn(
+                              'border-b border-border/50 cursor-pointer transition-colors',
+                              isSelected ? 'bg-slate-100' : 'hover:bg-slate-50'
+                            )}
+                          >
+                            <td className="px-5 py-2 font-mono text-slate-700 flex items-center gap-2">
+                              {row.WRA}
+                              {detailRows.some(d => d.WRA === row.WRA.split('-')[0]) && (
+                                <span className="text-[10px] text-blue-400 font-normal">▸ αναλυτικά</span>
+                              )}
+                            </td>
+                            <td className="px-5 py-2 text-right font-mono text-orange-500">
+                              {row.INBOUNDQTY !== null ? row.INBOUNDQTY.toLocaleString('el-GR') : '—'}
+                            </td>
+                            <td className="px-5 py-2 text-right font-mono text-purple-500">
+                              {row.PUTAWAYQTY !== null ? row.PUTAWAYQTY.toLocaleString('el-GR') : '—'}
+                            </td>
+                            <td className={cn('px-5 py-2 text-right font-mono font-semibold', diffColor(rowGap))}>
+                              {rowGap !== 0 ? rowGap.toLocaleString('el-GR') : '—'}
+                            </td>
+                          </tr>
+
+                          {/* Inline drill-down */}
+                          {isSelected && (modalInbound.length > 0 || modalPutaway.length > 0) && (
+                            <tr key={`detail-${i}`}>
+                              <td colSpan={4} className="bg-slate-50 border-b border-border px-5 py-4">
+                                <div className="flex items-center justify-between mb-3">
+                                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                                    Αναλυτικά ώρα {row.WRA}
+                                  </span>
+                                  <button onClick={() => setSelectedHour(null)} className="text-muted hover:text-slate-600">
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                  {/* Inbound detail */}
+                                  <div>
+                                    <div className="text-[11px] font-bold text-orange-500 uppercase tracking-wider mb-2">
+                                      Inbound ({modalInbound.reduce((s, r) => s + r.QTY, 0).toLocaleString('el-GR')} τεμ.)
+                                    </div>
+                                    <table className="w-full text-xs">
+                                      <thead>
+                                        <tr className="text-muted border-b border-border">
+                                          <th className="text-left py-1 font-medium">Item</th>
+                                          <th className="text-right py-1 font-medium">Τεμ.</th>
+                                          <th className="text-right py-1 font-medium">Γραμμές</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {modalInbound.slice(0, 20).map((d, j) => (
+                                          <tr key={j} className="border-b border-border/30">
+                                            <td className="py-1 font-mono text-slate-600">{d.ITEMCODE}</td>
+                                            <td className="py-1 text-right font-mono text-orange-500">{d.QTY.toLocaleString('el-GR')}</td>
+                                            <td className="py-1 text-right font-mono text-muted">{d.LINES}</td>
+                                          </tr>
+                                        ))}
+                                        {modalInbound.length > 20 && (
+                                          <tr><td colSpan={3} className="py-1 text-muted italic">+{modalInbound.length - 20} ακόμα...</td></tr>
+                                        )}
+                                      </tbody>
+                                    </table>
+                                  </div>
+
+                                  {/* Putaway detail */}
+                                  <div>
+                                    <div className="text-[11px] font-bold text-purple-500 uppercase tracking-wider mb-2">
+                                      Putaway ({modalPutaway.reduce((s, r) => s + r.QTY, 0).toLocaleString('el-GR')} τεμ.)
+                                    </div>
+                                    <table className="w-full text-xs">
+                                      <thead>
+                                        <tr className="text-muted border-b border-border">
+                                          <th className="text-left py-1 font-medium">Item</th>
+                                          <th className="text-right py-1 font-medium">Τεμ.</th>
+                                          <th className="text-right py-1 font-medium">Γραμμές</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {modalPutaway.slice(0, 20).map((d, j) => (
+                                          <tr key={j} className="border-b border-border/30">
+                                            <td className="py-1 font-mono text-slate-600">{d.ITEMCODE}</td>
+                                            <td className="py-1 text-right font-mono text-purple-500">{d.QTY.toLocaleString('el-GR')}</td>
+                                            <td className="py-1 text-right font-mono text-muted">{d.LINES}</td>
+                                          </tr>
+                                        ))}
+                                        {modalPutaway.length > 20 && (
+                                          <tr><td colSpan={3} className="py-1 text-muted italic">+{modalPutaway.length - 20} ακόμα...</td></tr>
+                                        )}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </>
                       )
                     })}
                   </tbody>
