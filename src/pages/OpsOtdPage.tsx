@@ -180,6 +180,12 @@ export function OpsOtdPage() {
     { label: 'Ογκώδη',   todayVal: today?.OGKODH,     ystVal: yst?.OGKODH,     lwVal: lw?.OGKODH },
     { label: 'Gift',      todayVal: today?.GIFTORDERS,    ystVal: yst?.GIFTORDERS,    lwVal: lw?.GIFTORDERS },
     { label: 'Same Day',  todayVal: today?.SAMEDAYORDERS, ystVal: yst?.SAMEDAYORDERS, lwVal: lw?.SAMEDAYORDERS },
+    {
+      label: 'Ράφι',
+      todayVal: today?.SYNOLIKA != null && today?.AUTOSTORE != null ? today.SYNOLIKA - today.AUTOSTORE : null,
+      ystVal:   yst?.SYNOLIKA   != null && yst?.AUTOSTORE   != null ? yst.SYNOLIKA   - yst.AUTOSTORE   : null,
+      lwVal:    lw?.SYNOLIKA    != null && lw?.AUTOSTORE    != null ? lw.SYNOLIKA    - lw.AUTOSTORE    : null,
+    },
   ]
 
   const totalRemaining = (today?.YPOLRAFI ?? 0) + (today?.YPOLSAMEDAY ?? 0)
