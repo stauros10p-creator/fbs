@@ -5,6 +5,10 @@ import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { RefreshCw, ArrowLeft, Truck } from 'lucide-react'
 import { HistoryPicker } from '@/components/ui/HistoryPicker'
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, Legend, ResponsiveContainer,
+} from 'recharts'
 
 interface OTDRow {
   PERIOD: string
@@ -450,6 +454,42 @@ export function OpsOtdPage() {
                   </tbody>
                 </table>
               </div>
+
+            {/* Chart — grouped bars ανά κατηγορία */}
+            {(() => {
+              const rafToday = (today?.SYNOLIKA ?? 0) - (today?.AUTOSTORE ?? 0)
+              const rafYst   = (yst?.SYNOLIKA   ?? 0) - (yst?.AUTOSTORE   ?? 0)
+              const rafLw    = (lw?.SYNOLIKA    ?? 0) - (lw?.AUTOSTORE    ?? 0)
+              const chartData = [
+                { name: 'Πολυγρ.',   Today: today?.POLIKES    ?? 0, Yesterday: yst?.POLIKES    ?? 0, 'Last Week': lw?.POLIKES    ?? 0 },
+                { name: 'Μονογρ.',   Today: today?.MONIKES    ?? 0, Yesterday: yst?.MONIKES    ?? 0, 'Last Week': lw?.MONIKES    ?? 0 },
+                { name: 'AutoStore', Today: today?.AUTOSTORE  ?? 0, Yesterday: yst?.AUTOSTORE  ?? 0, 'Last Week': lw?.AUTOSTORE  ?? 0 },
+                { name: 'Ογκώδη',   Today: today?.OGKODH     ?? 0, Yesterday: yst?.OGKODH     ?? 0, 'Last Week': lw?.OGKODH     ?? 0 },
+                { name: 'Gift',      Today: today?.GIFTORDERS ?? 0, Yesterday: yst?.GIFTORDERS ?? 0, 'Last Week': lw?.GIFTORDERS ?? 0 },
+                { name: 'Ράφι',      Today: rafToday,               Yesterday: rafYst,               'Last Week': rafLw },
+              ]
+              return (
+                <div className="panel">
+                  <div className="text-xs font-bold tracking-widest text-muted uppercase mb-4">Ανά κατηγορία — Today / Yesterday / Last Week</div>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={chartData} barCategoryGap="25%" barGap={3}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e6ef" vertical={false} />
+                      <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} width={45}
+                        tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(1)}k` : String(v)} />
+                      <Tooltip
+                        contentStyle={{ fontSize: 12, border: '1px solid #e2e6ef', borderRadius: 8 }}
+                        formatter={(v: number) => v.toLocaleString('el-GR')}
+                      />
+                      <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+                      <Bar dataKey="Today"     fill="#378ADD" radius={[3,3,0,0]} />
+                      <Bar dataKey="Yesterday" fill="#888780" radius={[3,3,0,0]} />
+                      <Bar dataKey="Last Week" fill="#B4B2A9" radius={[3,3,0,0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )
+            })()}
 
               {/* Remaining by type */}
               <div className="panel p-0 overflow-hidden">
