@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { BarChart2, TrendingUp, Activity, Clock, ChevronRight, CalendarCheck } from 'lucide-react'
+import { BarChart2, TrendingUp, Activity, Clock, ChevronRight, CalendarCheck, PackageOpen } from 'lucide-react'
 import type { FC, SVGProps } from 'react'
 
 interface ReportCard {
@@ -45,6 +45,16 @@ const REPORTS: ReportCard[] = [
     accentBg: 'bg-teal-500/10',
     accentText: 'text-teal-600',
     accentBorder: 'hover:border-teal-400/50',
+  },
+  {
+    to: '/ops/inbound',
+    Icon: PackageOpen,
+    label: 'Throughput Παραλαβών & Putaway',
+    description: 'Ανά ώρα παραλαβές (Inbound) και τοποθέτηση (Putaway) τεμαχίων από LOCATION_TRANSACTIONS',
+    tags: ['Ανά ώρα', 'Inbound', 'Putaway', 'Εκκρεμεί'],
+    accentBg: 'bg-orange-500/10',
+    accentText: 'text-orange-500',
+    accentBorder: 'hover:border-orange-400/50',
   },
   {
     to: '/ops/picking',
