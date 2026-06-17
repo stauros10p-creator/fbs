@@ -4,6 +4,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { RefreshCw, ArrowLeft, CheckCircle, Clock, X } from 'lucide-react'
+import { HistoryPicker } from '@/components/ui/HistoryPicker'
 
 interface CompletedRow {
   DUEDATE: string
@@ -114,26 +115,27 @@ function OrderModal({
 
 export function OpsDueDatePage() {
   const navigate = useNavigate()
-  const [snapshot, setSnapshot]     = useState<DueDateSnapshot | null>(null)
-  const [loading, setLoading]       = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [modal, setModal]           = useState<'ontime' | 'late' | 'pending' | null>(null)
+  const [snapshot, setSnapshot]       = useState<DueDateSnapshot | null>(null)
+  const [loading, setLoading]         = useState(true)
+  const [refreshing, setRefreshing]   = useState(false)
+  const [modal, setModal]             = useState<'ontime' | 'late' | 'pending' | null>(null)
+  const [historyDate, setHistoryDate] = useState('')
 
-  async function load(showRefresh = false) {
+  async function load(showRefresh = false, date = historyDate) {
     if (showRefresh) setRefreshing(true)
     else setLoading(true)
-    const { data, error } = await supabase
-      .from('due_date_snapshots')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single()
+    let q = supabase.from('due_date_snapshots').select('*').order('created_at', { ascending: false }).limit(1)
+    if (date) {
+      q = q.gte('generated_at', date + ' 00:00:00').lte('generated_at', date + ' 23:59:59')
+    }
+    const { data, error } = await q.single()
     if (!error && data) setSnapshot(data as DueDateSnapshot)
+    else if (error) setSnapshot(null)
     setLoading(false)
     setRefreshing(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(false, historyDate) }, [historyDate])
 
   const completed    = snapshot?.completed_today ?? []
   const pending      = snapshot?.pending ?? []
@@ -156,6 +158,7 @@ export function OpsDueDatePage() {
         subtitle="Ολοκληρωμένες σήμερα & εκκρεμείς ανά ημερομηνία"
         actions={
           <div className="flex items-center gap-2">
+            <HistoryPicker value={historyDate} onChange={setHistoryDate} />
             <button onClick={() => navigate('/ops')} className="btn-secondary text-xs flex items-center gap-1.5">
               <ArrowLeft className="w-3.5 h-3.5" /> Πίσω
             </button>
@@ -171,7 +174,7 @@ export function OpsDueDatePage() {
 
         {!loading && !snapshot && (
           <div className="text-center py-20 text-muted text-sm">
-            No data. Run the script first.
+            {historyDate ? `Δεν υπάρχει snapshot για ${historyDate}` : 'No data. Run the script first.'}
           </div>
         )}
 
