@@ -313,11 +313,18 @@ export function OpsOtdPage() {
                 <div className="text-center text-[10px] text-muted uppercase tracking-wider">Last Week</div>
               </div>
 
-              <MetricRow label="Πολυγραμμικές" today={today?.POLIKES}    yst={yst?.POLIKES}    lw={lw?.POLIKES} />
-              <MetricRow label="Μονογραμμικές" today={today?.MONIKES}    yst={yst?.MONIKES}    lw={lw?.MONIKES} />
-              <MetricRow label="AutoStore" today={today?.AUTOSTORE}  yst={yst?.AUTOSTORE}  lw={lw?.AUTOSTORE} />
-              <MetricRow label="Ογκώδη"   today={today?.OGKODH}     yst={yst?.OGKODH}     lw={lw?.OGKODH} />
-              <MetricRow label="Gift"      today={today?.GIFTORDERS} yst={yst?.GIFTORDERS} lw={lw?.GIFTORDERS} />
+              <MetricRow label="Πολυγραμμικές" today={today?.POLIKES}       yst={yst?.POLIKES}       lw={lw?.POLIKES} />
+              <MetricRow label="Μονογραμμικές" today={today?.MONIKES}       yst={yst?.MONIKES}       lw={lw?.MONIKES} />
+              <MetricRow label="AutoStore"     today={today?.AUTOSTORE}     yst={yst?.AUTOSTORE}     lw={lw?.AUTOSTORE} />
+              <MetricRow label="Ογκώδη"        today={today?.OGKODH}        yst={yst?.OGKODH}        lw={lw?.OGKODH} />
+              <MetricRow label="Gift"          today={today?.GIFTORDERS}    yst={yst?.GIFTORDERS}    lw={lw?.GIFTORDERS} />
+              <MetricRow label="Same Day"      today={today?.SAMEDAYORDERS} yst={yst?.SAMEDAYORDERS} lw={lw?.SAMEDAYORDERS} />
+              <MetricRow
+                label="Ράφι"
+                today={today?.SYNOLIKA != null && today?.AUTOSTORE != null ? today.SYNOLIKA - today.AUTOSTORE : null}
+                yst={yst?.SYNOLIKA   != null && yst?.AUTOSTORE   != null ? yst.SYNOLIKA   - yst.AUTOSTORE   : null}
+                lw={lw?.SYNOLIKA    != null && lw?.AUTOSTORE    != null ? lw.SYNOLIKA    - lw.AUTOSTORE    : null}
+              />
             </div>
 
             {/* Ανάλυση ρυθμού + Υπόλοιπα */}
