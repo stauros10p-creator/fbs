@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, Truck, Users, BarChart2, CalendarDays,
   ShieldCheck, FileBarChart, Bell, Cpu, Settings,
-  Package, ChevronDown, ChevronRight,
+  Package, ChevronDown, ChevronRight, PackageOpen,
 } from 'lucide-react'
 
 const OUTBOUND_NAV = [
@@ -22,7 +22,7 @@ const OUTBOUND_NAV = [
 ]
 
 const INBOUND_NAV: { to: string; Icon: any; label: string; badge?: boolean }[] = [
-  // θα προστεθούν σύντομα
+  { to: '/ops/inbound', Icon: PackageOpen, label: 'Παραλαβές & Putaway' },
 ]
 
 function NavSection({
