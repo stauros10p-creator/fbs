@@ -62,9 +62,10 @@ export function OpsInboundPage() {
   const totalRow   = rows.find(r => r.WRA === 'Synolo')
 
   const chartData = hourlyRows.map(r => ({
-    hour:    r.WRA,
-    Inbound: r.INBOUNDQTY ?? 0,
-    Putaway: r.PUTAWAYQTY ?? 0,
+    hour:      r.WRA,
+    Inbound:   r.INBOUNDQTY ?? 0,
+    Putaway:   r.PUTAWAYQTY ?? 0,
+    Διαφορά:  (r.INBOUNDQTY ?? 0) - (r.PUTAWAYQTY ?? 0),
   }))
 
   const totalInbound = totalRow?.INBOUNDQTY ?? null
@@ -136,10 +137,12 @@ export function OpsInboundPage() {
                     <Tooltip
                       contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e6ef' }}
                       formatter={(val: number, name: string) => [val.toLocaleString('el-GR'), name]}
+                      itemSorter={item => -(item.value as number)}
                     />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
                     <Line type="monotone" dataKey="Inbound" stroke="#f97316" strokeWidth={2} dot={false} />
                     <Line type="monotone" dataKey="Putaway" stroke="#a855f7" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="Διαφορά" stroke="#64748b" strokeWidth={1.5} dot={false} strokeDasharray="4 3" />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
