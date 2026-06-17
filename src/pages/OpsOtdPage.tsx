@@ -15,6 +15,7 @@ interface OTDRow {
   SYNOLOIMERAS: number | null
   OGKODH: number | null
   GIFTORDERS: number | null
+  SAMEDAYORDERS: number | null
   YPOLRAFI: number | null
   YPOLSAMEDAY: number | null
   YPOLAUTOSTORE: number | null
@@ -123,7 +124,12 @@ export function OpsOtdPage() {
   const [snapshot, setSnapshot] = useState<OTDSnapshot | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const { timeLeft, urgency } = useCountdown(1, 45)
+  const { timeLeft, urgency }                     = useCountdown(1, 45)
+  const { timeLeft: sdTimeLeft, urgency: sdUrgency } = useCountdown(15, 30)
+
+  const dayOfWeek  = new Date().getDay() // 0=Κυρ, 6=Σαβ
+  const isWeekend  = dayOfWeek === 0 || dayOfWeek === 6
+  const isWeekday  = !isWeekend
 
   async function load(showRefresh = false) {
     if (showRefresh) setRefreshing(true)
@@ -157,10 +163,12 @@ export function OpsOtdPage() {
 
   function estimate(): number | null {
     if (!today?.SYNOLIKA) return null
-    const now = new Date()
-    const elapsed = (now.getHours() * 60 + now.getMinutes()) / (24 * 60)
-    if (elapsed < 0.1) return null
-    return Math.round(today.SYNOLIKA / elapsed)
+    // Σαββατοκύριακο → σύγκριση με περσινή εβδομάδα (ίδια μέρα)
+    // Καθημερινή     → σύγκριση με χθες
+    const ref = isWeekend ? lw : yst
+    if (!ref?.SYNOLIKA || !ref?.SYNOLOIMERAS) return null
+    const ratio = ref.SYNOLOIMERAS / ref.SYNOLIKA
+    return Math.round(today.SYNOLIKA * ratio)
   }
 
   const categories = [
@@ -168,7 +176,8 @@ export function OpsOtdPage() {
     { label: 'Μονογραμμικές', todayVal: today?.MONIKES,    ystVal: yst?.MONIKES,    lwVal: lw?.MONIKES },
     { label: 'AutoStore', todayVal: today?.AUTOSTORE,  ystVal: yst?.AUTOSTORE,  lwVal: lw?.AUTOSTORE },
     { label: 'Ογκώδη',   todayVal: today?.OGKODH,     ystVal: yst?.OGKODH,     lwVal: lw?.OGKODH },
-    { label: 'Gift',      todayVal: today?.GIFTORDERS, ystVal: yst?.GIFTORDERS, lwVal: lw?.GIFTORDERS },
+    { label: 'Gift',      todayVal: today?.GIFTORDERS,    ystVal: yst?.GIFTORDERS,    lwVal: lw?.GIFTORDERS },
+    { label: 'Same Day',  todayVal: today?.SAMEDAYORDERS, ystVal: yst?.SAMEDAYORDERS, lwVal: lw?.SAMEDAYORDERS },
   ]
 
   const totalRemaining = (today?.YPOLRAFI ?? 0) + (today?.YPOLSAMEDAY ?? 0)
@@ -307,7 +316,7 @@ export function OpsOtdPage() {
               <div className="panel">
                 <div className="text-xs font-bold tracking-widest text-muted uppercase mb-3">Ανάλυση ρυθμού</div>
                 {[
-                  { label: 'Εκτίμηση τέλους', val: estimate() ? `~${fmt(estimate())}` : '—' },
+                  { label: `Εκτίμηση τέλους ${isWeekend ? '(vs LW)' : '(vs χθες)'}`, val: estimate() ? `~${fmt(estimate())}` : '—' },
                   { label: 'AutoStore %', val: today?.SYNOLIKA && today?.AUTOSTORE != null ? `${Math.round((today.AUTOSTORE / today.SYNOLIKA) * 100)}%` : '—' },
                   { label: 'Gift %', val: today?.SYNOLIKA && today?.GIFTORDERS ? `${((today.GIFTORDERS / today.SYNOLIKA) * 100).toFixed(1)}%` : '—' },
                   { label: 'Ογκώδη %', val: today?.SYNOLIKA && today?.OGKODH ? `${((today.OGKODH / today.SYNOLIKA) * 100).toFixed(1)}%` : '—' },
@@ -330,12 +339,30 @@ export function OpsOtdPage() {
                   <span className="font-semibold text-slate-800">{fmt(today?.YPOLRAFI)}</span>
                 </div>
 
-                {/* Same Day */}
-                <div className="flex justify-between items-center py-2 border-b border-border/50 text-sm">
-                  <span className="text-muted">Same Day</span>
-                  <span className={cn('font-semibold', (today?.YPOLSAMEDAY ?? 0) > 0 ? 'text-red-500' : 'text-slate-800')}>
-                    {fmt(today?.YPOLSAMEDAY)}{(today?.YPOLSAMEDAY ?? 0) > 0 ? ' ⚠' : ''}
-                  </span>
+                {/* Same Day — countdown μόνο Δευτ-Παρ */}
+                <div className="py-2 border-b border-border/50">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted">Same Day</span>
+                    <span className={cn('font-semibold', (today?.YPOLSAMEDAY ?? 0) > 0 ? 'text-red-500' : 'text-slate-800')}>
+                      {fmt(today?.YPOLSAMEDAY)}{(today?.YPOLSAMEDAY ?? 0) > 0 ? ' ⚠' : ''}
+                    </span>
+                  </div>
+                  {isWeekday && (
+                    <div className={cn(
+                      'mt-1.5 flex items-center gap-1.5 text-xs rounded-lg px-2 py-1.5',
+                      sdUrgency === 'critical' ? 'bg-red-50' : sdUrgency === 'warn' ? 'bg-orange-50' : 'bg-green-50'
+                    )}>
+                      <Truck className={cn('w-3.5 h-3.5',
+                        sdUrgency === 'critical' ? 'text-red-500' : sdUrgency === 'warn' ? 'text-orange-400' : 'text-green-500'
+                      )} />
+                      <span className="text-muted">Φορτηγό 15:30 — απομένουν</span>
+                      <span className={cn('font-mono font-bold ml-auto tabular-nums',
+                        sdUrgency === 'critical' ? 'text-red-500' : sdUrgency === 'warn' ? 'text-orange-400' : 'text-green-500'
+                      )}>
+                        {sdTimeLeft}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* AutoStore */}
