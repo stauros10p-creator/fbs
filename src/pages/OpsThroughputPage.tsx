@@ -4,6 +4,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { RefreshCw, ArrowLeft } from 'lucide-react'
+import { HistoryPicker } from '@/components/ui/HistoryPicker'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer,
@@ -34,31 +35,33 @@ function diffColor(v: number | null) {
 
 export function OpsThroughputPage() {
   const navigate = useNavigate()
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
+  const [snapshot, setSnapshot]       = useState<Snapshot | null>(null)
+  const [loading, setLoading]         = useState(true)
+  const [refreshing, setRefreshing]   = useState(false)
   const [selectedDay, setSelectedDay] = useState<string>('')
+  const [historyDate, setHistoryDate] = useState('')
 
-  async function load(showRefresh = false) {
+  async function load(showRefresh = false, date = historyDate) {
     if (showRefresh) setRefreshing(true)
     else setLoading(true)
-    const { data, error } = await supabase
-      .from('throughput_snapshots')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single()
+    let q = supabase.from('throughput_snapshots').select('*').order('created_at', { ascending: false }).limit(1)
+    if (date) {
+      q = q.gte('generated_at', date + ' 00:00:00').lte('generated_at', date + ' 23:59:59')
+    }
+    const { data, error } = await q.single()
     if (!error && data) {
       const snap = data as Snapshot
       setSnapshot(snap)
       const days = [...new Set(snap.rows.filter(r => r.WRA !== 'Synolo').map(r => r.IMEROMINIA))]
       if (days.length > 0) setSelectedDay(days[0])
+    } else if (error) {
+      setSnapshot(null)
     }
     setLoading(false)
     setRefreshing(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(false, historyDate) }, [historyDate])
 
   const rows = snapshot?.rows ?? []
   const hourlyRows = rows.filter(r => r.WRA !== 'Synolo')
@@ -100,6 +103,7 @@ export function OpsThroughputPage() {
         subtitle="Hourly packed vs downloaded orders"
         actions={
           <div className="flex items-center gap-2">
+            <HistoryPicker value={historyDate} onChange={setHistoryDate} />
             <button onClick={() => navigate('/ops')} className="btn-secondary text-xs flex items-center gap-1.5">
               <ArrowLeft className="w-3.5 h-3.5" /> Πίσω
             </button>
@@ -115,7 +119,7 @@ export function OpsThroughputPage() {
 
         {!loading && !snapshot && (
           <div className="text-center py-20 text-muted text-sm">
-            No data. Run <span className="font-mono text-info">Τρεξε Throughput Packing.bat</span> first.
+            {historyDate ? `Δεν υπάρχει snapshot για ${historyDate}` : 'No data. Run the script first.'}
           </div>
         )}
 
