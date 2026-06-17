@@ -5,6 +5,7 @@ import { DashboardPage } from '@/pages/DashboardPage'
 import { TeamPage } from '@/pages/TeamPage'
 import { SchedulePage } from '@/pages/SchedulePage'
 import { ForecastPage } from '@/pages/ForecastPage'
+import { ForecastHubPage } from '@/pages/ForecastHubPage'
 import { OpsSnapshotPage } from '@/pages/OpsSnapshotPage'
 import { OpsOtdPage } from '@/pages/OpsOtdPage'
 import { OpsThroughputPage } from '@/pages/OpsThroughputPage'
@@ -24,7 +25,8 @@ export default function App() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/team" element={<TeamPage />} />
             <Route path="/schedule" element={<SchedulePage />} />
-            <Route path="/forecast" element={<ForecastPage />} />
+            <Route path="/forecast" element={<ForecastHubPage />} />
+            <Route path="/forecast/staff" element={<ForecastPage />} />
             <Route path="/ops" element={<OpsSnapshotPage />} />
             <Route path="/ops/otd" element={<OpsOtdPage />} />
             <Route path="/ops/throughput" element={<OpsThroughputPage />} />
@@ -32,6 +34,7 @@ export default function App() {
             <Route path="/ops/inbound" element={<OpsInboundPage />} />
             <Route path="/copilot" element={<CopilotPage />} />
             <Route path="/staff-plan" element={<StaffPlanPage />} />
+            <Route path="/forecast/hourly" element={<HourlyForecastPage />} />
             <Route path="/hourly-forecast" element={<HourlyForecastPage />} />
           </Routes>
         </Layout>
