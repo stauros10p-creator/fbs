@@ -24,6 +24,16 @@ interface DetailRow {
   LINES: number
 }
 
+interface DailyRow {
+  IMERO: string
+  IMERA: string
+  TEMAXIA: number
+  EIDI: number
+  DEIKTIS: number
+  APOTHETIS: number
+  OGKOS: number
+}
+
 interface Snapshot {
   id: number
   generated_at: string
@@ -31,6 +41,7 @@ interface Snapshot {
   date_to: string
   rows: InboundRow[]
   detail_rows: DetailRow[]
+  daily_rows: DailyRow[]
 }
 
 function diffColor(v: number | null) {
@@ -42,11 +53,12 @@ function diffColor(v: number | null) {
 
 export function OpsInboundPage() {
   const navigate = useNavigate()
-  const [snapshot, setSnapshot]       = useState<Snapshot | null>(null)
-  const [loading, setLoading]         = useState(true)
-  const [refreshing, setRefreshing]   = useState(false)
-  const [historyDate, setHistoryDate] = useState('')
+  const [snapshot, setSnapshot]         = useState<Snapshot | null>(null)
+  const [loading, setLoading]           = useState(true)
+  const [refreshing, setRefreshing]     = useState(false)
+  const [historyDate, setHistoryDate]   = useState('')
   const [selectedHour, setSelectedHour] = useState<string | null>(null)
+  const [dailyDays, setDailyDays]       = useState<7 | 14>(14)
 
   async function load(showRefresh = false, date = historyDate) {
     if (showRefresh) setRefreshing(true)
@@ -67,10 +79,11 @@ export function OpsInboundPage() {
 
   useEffect(() => { load(false, historyDate) }, [historyDate])
 
-  const rows       = snapshot?.rows ?? []
-  const hourlyRows = rows.filter(r => r.WRA !== 'Synolo')
-  const totalRow   = rows.find(r => r.WRA === 'Synolo')
-  const detailRows = snapshot?.detail_rows ?? []
+  const rows        = snapshot?.rows ?? []
+  const hourlyRows  = rows.filter(r => r.WRA !== 'Synolo')
+  const totalRow    = rows.find(r => r.WRA === 'Synolo')
+  const detailRows  = snapshot?.detail_rows ?? []
+  const dailyRows   = (snapshot?.daily_rows ?? []).slice(0, dailyDays)
 
   const chartData = hourlyRows.map(r => ({
     hour:     r.WRA,
@@ -124,6 +137,67 @@ export function OpsInboundPage() {
               <span className="text-border">|</span>
               <span>⏱ {snapshot.generated_at}</span>
             </div>
+
+            {/* Daily Αφίξεις */}
+            {dailyRows.length > 0 && (
+              <div className="panel p-0 overflow-hidden">
+                <div className="px-5 py-3 bg-slate-50 border-b border-border flex items-center justify-between">
+                  <span className="font-bold text-slate-800 text-sm">Ημερήσιες Αφίξεις Ράμπας</span>
+                  <div className="flex gap-1">
+                    {([7, 14] as const).map(d => (
+                      <button
+                        key={d}
+                        onClick={() => setDailyDays(d)}
+                        className={cn(
+                          'text-xs px-2.5 py-1 rounded font-mono border transition-colors',
+                          dailyDays === d
+                            ? 'bg-orange-500 text-white border-orange-500'
+                            : 'bg-white text-muted border-border hover:border-orange-300'
+                        )}
+                      >
+                        {d}η
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-xs text-muted uppercase tracking-wider border-b border-border bg-slate-50/50">
+                      <th className="text-left px-5 py-2 font-medium">Ημερομηνία</th>
+                      <th className="text-left px-5 py-2 font-medium">Ημέρα</th>
+                      <th className="text-right px-5 py-2 font-medium text-orange-600">Τεμάχια</th>
+                      <th className="text-right px-5 py-2 font-medium">Είδη</th>
+                      <th className="text-right px-5 py-2 font-medium">Qty/Είδος</th>
+                      <th className="text-right px-5 py-2 font-medium">Αποθέτες</th>
+                      <th className="text-right px-5 py-2 font-medium">Όγκος (lt)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dailyRows.map((r, i) => (
+                      <tr key={i} className="border-b border-border/50 hover:bg-slate-50">
+                        <td className="px-5 py-2 font-mono text-slate-700">{r.IMERO}</td>
+                        <td className="px-5 py-2 text-muted capitalize">{r.IMERA?.trim()}</td>
+                        <td className="px-5 py-2 text-right font-mono font-semibold text-orange-500">
+                          {(r.TEMAXIA ?? 0).toLocaleString('el-GR')}
+                        </td>
+                        <td className="px-5 py-2 text-right font-mono text-slate-600">
+                          {(r.EIDI ?? 0).toLocaleString('el-GR')}
+                        </td>
+                        <td className="px-5 py-2 text-right font-mono text-slate-500">
+                          {r.DEIKTIS != null ? r.DEIKTIS.toLocaleString('el-GR') : '—'}
+                        </td>
+                        <td className="px-5 py-2 text-right font-mono text-slate-500">
+                          {r.APOTHETIS ?? 0}
+                        </td>
+                        <td className="px-5 py-2 text-right font-mono text-slate-500">
+                          {(r.OGKOS ?? 0).toLocaleString('el-GR')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             {/* KPIs */}
             <div className="flex gap-4">
