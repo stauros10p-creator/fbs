@@ -12,7 +12,8 @@ interface ComparisonRow {
   AFX_EIDI: number
   PAR_TEMAXIA: number
   PAR_EIDI: number
-  DIAFORA: number
+  DIAFORA_TEMAXIA: number
+  DIAFORA_EIDI: number
 }
 
 function today() {
@@ -63,11 +64,12 @@ export function OpsAfixeisPage() {
     .sort((a, b) => a.IMERO_SORT.localeCompare(b.IMERO_SORT))
 
   // Totals
-  const totAfxTem = rows.reduce((s, r) => s + (r.AFX_TEMAXIA ?? 0), 0)
-  const totAfxEid = rows.reduce((s, r) => s + (r.AFX_EIDI ?? 0), 0)
-  const totParTem = rows.reduce((s, r) => s + (r.PAR_TEMAXIA ?? 0), 0)
-  const totParEid = rows.reduce((s, r) => s + (r.PAR_EIDI ?? 0), 0)
-  const totDia    = totAfxTem - totParTem
+  const totAfxTem  = rows.reduce((s, r) => s + (r.AFX_TEMAXIA ?? 0), 0)
+  const totAfxEid  = rows.reduce((s, r) => s + (r.AFX_EIDI ?? 0), 0)
+  const totParTem  = rows.reduce((s, r) => s + (r.PAR_TEMAXIA ?? 0), 0)
+  const totParEid  = rows.reduce((s, r) => s + (r.PAR_EIDI ?? 0), 0)
+  const totDiaTem  = totAfxTem - totParTem
+  const totDiaEid  = totAfxEid - totParEid
 
   return (
     <div className="min-h-full">
@@ -131,11 +133,15 @@ export function OpsAfixeisPage() {
                   <th className="text-right px-5 py-3 font-medium text-orange-400">Αφίξεις είδη</th>
                   <th className="text-right px-5 py-3 font-medium text-blue-600">Παραλαβές τεμ.</th>
                   <th className="text-right px-5 py-3 font-medium text-blue-400">Παραλαβές είδη</th>
-                  <th className="text-right px-5 py-3 font-medium">Διαφορά</th>
+                  <th className="text-right px-5 py-3 font-medium">Διαφορά τεμ.</th>
+                  <th className="text-right px-5 py-3 font-medium">Διαφορά είδη</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => (
+                {rows.map((r, i) => {
+                  const dTem = (r.AFX_TEMAXIA ?? 0) - (r.PAR_TEMAXIA ?? 0)
+                  const dEid = (r.AFX_EIDI ?? 0) - (r.PAR_EIDI ?? 0)
+                  return (
                   <tr key={i} className="border-b border-border/50 hover:bg-slate-50">
                     <td className="px-5 py-3 font-mono text-slate-700">{r.IMERO}</td>
                     <td className="px-5 py-3 text-right font-mono font-semibold text-orange-500">
@@ -150,13 +156,15 @@ export function OpsAfixeisPage() {
                     <td className="px-5 py-3 text-right font-mono text-blue-400">
                       {fmt(r.PAR_EIDI ?? 0)}
                     </td>
-                    <td className={cn('px-5 py-3 text-right font-mono font-semibold', diffColor(r.DIAFORA ?? 0))}>
-                      {(r.DIAFORA ?? 0) !== 0
-                        ? ((r.DIAFORA ?? 0) > 0 ? '+' : '') + fmt(r.DIAFORA ?? 0)
-                        : '—'}
+                    <td className={cn('px-5 py-3 text-right font-mono font-semibold', diffColor(dTem))}>
+                      {dTem !== 0 ? (dTem > 0 ? '+' : '') + fmt(dTem) : '—'}
+                    </td>
+                    <td className={cn('px-5 py-3 text-right font-mono font-semibold', diffColor(dEid))}>
+                      {dEid !== 0 ? (dEid > 0 ? '+' : '') + fmt(dEid) : '—'}
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
 
                 {/* Totals row */}
                 <tr className="bg-slate-100 font-bold border-t-2 border-border">
@@ -165,8 +173,11 @@ export function OpsAfixeisPage() {
                   <td className="px-5 py-3 text-right font-mono text-orange-400">{fmt(totAfxEid)}</td>
                   <td className="px-5 py-3 text-right font-mono text-blue-600">{fmt(totParTem)}</td>
                   <td className="px-5 py-3 text-right font-mono text-blue-400">{fmt(totParEid)}</td>
-                  <td className={cn('px-5 py-3 text-right font-mono', diffColor(totDia))}>
-                    {totDia !== 0 ? (totDia > 0 ? '+' : '') + fmt(totDia) : '—'}
+                  <td className={cn('px-5 py-3 text-right font-mono', diffColor(totDiaTem))}>
+                    {totDiaTem !== 0 ? (totDiaTem > 0 ? '+' : '') + fmt(totDiaTem) : '—'}
+                  </td>
+                  <td className={cn('px-5 py-3 text-right font-mono', diffColor(totDiaEid))}>
+                    {totDiaEid !== 0 ? (totDiaEid > 0 ? '+' : '') + fmt(totDiaEid) : '—'}
                   </td>
                 </tr>
               </tbody>
