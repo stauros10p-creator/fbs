@@ -145,6 +145,13 @@ function LiveOpsWidget() {
     { label: 'Picking ράφι',  value: out?.picking_rafi, color: 'text-sky-500' },
   ]
 
+  const pickingTotal  = (out?.picking_rafi ?? 0) + (out?.picking_autostore ?? 0)
+  const packedTotal   = out?.packed_total ?? 0
+  const cmpRafi       = out?.picking_rafi ? Math.round((out.packed_rafi / out.picking_rafi) * 100) : null
+  const cmpAutostore  = out?.picking_autostore ? Math.round((out.packed_autostore / out.picking_autostore) * 100) : null
+  const cmpTotal      = pickingTotal ? Math.round((packedTotal / pickingTotal) * 100) : null
+  const pctColor      = (v: number | null) => v == null ? 'text-slate-400' : v >= 90 ? 'text-green-500' : v >= 70 ? 'text-amber-500' : 'text-red-500'
+
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
       <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
@@ -165,6 +172,36 @@ function LiveOpsWidget() {
           </div>
         ))}
       </div>
+      {out && (
+        <div className="border-t border-slate-100">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-[10px] text-slate-400 uppercase border-b border-slate-100 bg-slate-50/50">
+                <th className="text-left px-4 py-1.5 font-medium">Packed vs Picking</th>
+                <th className="text-right px-4 py-1.5 font-medium text-green-600">Packed</th>
+                <th className="text-right px-4 py-1.5 font-medium text-blue-600">Picking</th>
+                <th className="text-right px-4 py-1.5 font-medium">%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                { label: 'Ράφι',      packed: out.packed_rafi,      picking: out.picking_rafi,      pct: cmpRafi },
+                { label: 'AutoStore', packed: out.packed_autostore,  picking: out.picking_autostore, pct: cmpAutostore },
+                { label: 'Σύνολο',   packed: packedTotal,           picking: pickingTotal,          pct: cmpTotal, bold: true },
+              ].map(r => (
+                <tr key={r.label} className={`border-b border-slate-50 ${r.bold ? 'bg-slate-50 font-semibold' : ''}`}>
+                  <td className="px-4 py-1.5 text-slate-700">{r.label}</td>
+                  <td className="px-4 py-1.5 text-right font-mono text-green-600">{r.packed.toLocaleString('el-GR')}</td>
+                  <td className="px-4 py-1.5 text-right font-mono text-blue-600">{r.picking.toLocaleString('el-GR')}</td>
+                  <td className={`px-4 py-1.5 text-right font-mono font-semibold ${pctColor(r.pct)}`}>
+                    {r.pct != null ? `${r.pct}%` : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }
