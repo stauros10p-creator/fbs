@@ -1,6 +1,9 @@
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { BarChart2, TrendingUp, Activity, Clock, ChevronRight, CalendarCheck, PackageOpen, Radio } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import { cn } from '@/lib/utils'
 import type { FC, SVGProps } from 'react'
 
 interface ReportCard {
@@ -90,6 +93,65 @@ const REPORTS: ReportCard[] = [
   },
 ]
 
+function PackedPickingWidget() {
+  const [live, setLive] = useState<any>(null)
+
+  useEffect(() => {
+    supabase.from('live_snapshots').select('*').order('created_at', { ascending: false }).limit(1).single()
+      .then(({ data }) => { if (data) setLive(data) })
+  }, [])
+
+  const out = live?.data?.outbound
+  if (!out) return null
+
+  const pickingTotal = (out.picking_rafi ?? 0) + (out.picking_autostore ?? 0)
+  const packedTotal  = out.packed_total ?? 0
+  const pct = (p: number, k: number) => k > 0 ? Math.round((p / k) * 100) : null
+  const pctColor = (v: number | null) =>
+    v == null ? 'text-slate-400' : v >= 90 ? 'text-green-600' : v >= 70 ? 'text-amber-500' : 'text-red-500'
+
+  const rows = [
+    { label: 'Ράφι',      packed: out.packed_rafi,     picking: out.picking_rafi,      p: pct(out.packed_rafi, out.picking_rafi) },
+    { label: 'AutoStore', packed: out.packed_autostore, picking: out.picking_autostore, p: pct(out.packed_autostore, out.picking_autostore) },
+    { label: 'Σύνολο',   packed: packedTotal,          picking: pickingTotal,          p: pct(packedTotal, pickingTotal), bold: true },
+  ]
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Radio className="w-3.5 h-3.5 text-red-500" />
+          <span className="text-sm font-semibold text-slate-800">Live — Packed vs Picking</span>
+          {live && <span className="text-[10px] text-muted font-mono">{live.generated_at}</span>}
+        </div>
+        <Link to="/ops/live" className="text-xs text-blue-600 font-medium hover:underline">Αναλυτικά →</Link>
+      </div>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-xs text-muted uppercase border-b border-slate-100 bg-slate-50/50">
+            <th className="text-left px-5 py-2 font-medium"></th>
+            <th className="text-right px-5 py-2 font-medium text-green-600">Packed</th>
+            <th className="text-right px-5 py-2 font-medium text-blue-600">Picking</th>
+            <th className="text-right px-5 py-2 font-medium">Packed / Picking</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(r => (
+            <tr key={r.label} className={cn('border-b border-slate-50', r.bold && 'bg-slate-50 font-semibold')}>
+              <td className="px-5 py-2 text-slate-700">{r.label}</td>
+              <td className="px-5 py-2 text-right font-mono text-green-600">{r.packed.toLocaleString('el-GR')}</td>
+              <td className="px-5 py-2 text-right font-mono text-blue-600">{r.picking.toLocaleString('el-GR')}</td>
+              <td className={cn('px-5 py-2 text-right font-mono font-semibold', pctColor(r.p))}>
+                {r.p != null ? `${r.p}%` : '—'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export function OpsSnapshotPage() {
   const navigate = useNavigate()
 
@@ -101,7 +163,8 @@ export function OpsSnapshotPage() {
         subtitle="Επέλεξε report για να δεις αναλυτικά δεδομένα"
       />
 
-      <div className="p-8">
+      <div className="p-8 space-y-6">
+        <PackedPickingWidget />
         <div className="grid grid-cols-2 gap-5">
           {REPORTS.map((r, i) => (
             <button
