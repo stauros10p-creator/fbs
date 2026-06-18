@@ -4,6 +4,9 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { RefreshCw, ArrowLeft } from 'lucide-react'
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid,
+} from 'recharts'
 
 interface ComparisonRow {
   IMERO: string
@@ -58,18 +61,22 @@ export function OpsAfixeisPage() {
 
   useEffect(() => { load() }, [])
 
-  // Filter by selected date range (IMERO_SORT is 'YYYY-MM-DD')
   const rows = allRows
     .filter(r => r.IMERO_SORT >= dateFrom && r.IMERO_SORT <= dateTo)
     .sort((a, b) => a.IMERO_SORT.localeCompare(b.IMERO_SORT))
 
-  // Totals
   const totAfxTem  = rows.reduce((s, r) => s + (r.AFX_TEMAXIA ?? 0), 0)
   const totAfxEid  = rows.reduce((s, r) => s + (r.AFX_EIDI ?? 0), 0)
   const totParTem  = rows.reduce((s, r) => s + (r.PAR_TEMAXIA ?? 0), 0)
   const totParEid  = rows.reduce((s, r) => s + (r.PAR_EIDI ?? 0), 0)
   const totDiaTem  = totParTem - totAfxTem
   const totDiaEid  = totParEid - totAfxEid
+
+  const chartData = rows.map(r => ({
+    name: r.IMERO,
+    'Αφίξεις': r.AFX_TEMAXIA ?? 0,
+    'Παραλαβές': r.PAR_TEMAXIA ?? 0,
+  }))
 
   return (
     <div className="min-h-full">
@@ -124,68 +131,59 @@ export function OpsAfixeisPage() {
         )}
 
         {!loading && rows.length > 0 && (
-          <div className="panel p-0 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs text-muted uppercase tracking-wider border-b border-border bg-slate-50">
-                  <th className="text-left px-5 py-3 font-medium">Ημερομηνία</th>
-                  <th className="text-right px-5 py-3 font-medium text-orange-600">Αφίξεις τεμ.</th>
-                  <th className="text-right px-5 py-3 font-medium text-orange-400">Αφίξεις είδη</th>
-                  <th className="text-right px-5 py-3 font-medium text-blue-600">Παραλαβές τεμ.</th>
-                  <th className="text-right px-5 py-3 font-medium text-blue-400">Παραλαβές είδη</th>
-                  <th className="text-right px-5 py-3 font-medium">Διαφορά τεμ.</th>
-                  <th className="text-right px-5 py-3 font-medium">Διαφορά είδη</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, i) => {
-                  const dTem = (r.PAR_TEMAXIA ?? 0) - (r.AFX_TEMAXIA ?? 0)
-                  const dEid = (r.PAR_EIDI ?? 0) - (r.AFX_EIDI ?? 0)
-                  return (
-                  <tr key={i} className="border-b border-border/50 hover:bg-slate-50">
-                    <td className="px-5 py-3 font-mono text-slate-700">{r.IMERO}</td>
-                    <td className="px-5 py-3 text-right font-mono font-semibold text-orange-500">
-                      {fmt(r.AFX_TEMAXIA ?? 0)}
-                    </td>
-                    <td className="px-5 py-3 text-right font-mono text-orange-400">
-                      {fmt(r.AFX_EIDI ?? 0)}
-                    </td>
-                    <td className="px-5 py-3 text-right font-mono font-semibold text-blue-500">
-                      {fmt(r.PAR_TEMAXIA ?? 0)}
-                    </td>
-                    <td className="px-5 py-3 text-right font-mono text-blue-400">
-                      {fmt(r.PAR_EIDI ?? 0)}
-                    </td>
-                    <td className={cn('px-5 py-3 text-right font-mono font-semibold', diffColor(dTem))}>
-                      {dTem !== 0 ? (dTem > 0 ? '+' : '') + fmt(dTem) : '—'}
-                    </td>
-                    <td className={cn('px-5 py-3 text-right font-mono font-semibold', diffColor(dEid))}>
-                      {dEid !== 0 ? (dEid > 0 ? '+' : '') + fmt(dEid) : '—'}
-                    </td>
+          <>
+            {/* Chart */}
+            <div className="panel">
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={chartData} barCategoryGap="30%" barGap={4}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis tickFormatter={v => v.toLocaleString('el-GR')} tick={{ fontSize: 11 }} />
+                  <Tooltip formatter={(v: number) => v.toLocaleString('el-GR')} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="Αφίξεις"   fill="rgba(249,115,22,0.8)"  radius={[4,4,0,0]} />
+                  <Bar dataKey="Παραλαβές" fill="rgba(59,130,246,0.8)"  radius={[4,4,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Table */}
+            <div className="panel p-0 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs text-muted uppercase tracking-wider border-b border-border bg-slate-50">
+                    <th className="text-left px-5 py-3 font-medium">Ημερομηνία</th>
+                    <th className="text-right px-5 py-3 font-medium text-orange-600">Αφίξεις τεμ.</th>
+                    <th className="text-right px-5 py-3 font-medium text-orange-400">Αφίξεις είδη</th>
+                    <th className="text-right px-5 py-3 font-medium text-blue-600">Παραλαβές τεμ.</th>
+                    <th className="text-right px-5 py-3 font-medium text-blue-400">Παραλαβές είδη</th>
+                    <th className="text-right px-5 py-3 font-medium">Διαφορά τεμ.</th>
+                    <th className="text-right px-5 py-3 font-medium">Διαφορά είδη</th>
                   </tr>
-                  )
-                })}
-
-                {/* Totals row */}
-                <tr className="bg-slate-100 font-bold border-t-2 border-border">
-                  <td className="px-5 py-3 text-slate-800 uppercase text-xs tracking-wider">Σύνολο</td>
-                  <td className="px-5 py-3 text-right font-mono text-orange-600">{fmt(totAfxTem)}</td>
-                  <td className="px-5 py-3 text-right font-mono text-orange-400">{fmt(totAfxEid)}</td>
-                  <td className="px-5 py-3 text-right font-mono text-blue-600">{fmt(totParTem)}</td>
-                  <td className="px-5 py-3 text-right font-mono text-blue-400">{fmt(totParEid)}</td>
-                  <td className={cn('px-5 py-3 text-right font-mono', diffColor(totDiaTem))}>
-                    {totDiaTem !== 0 ? (totDiaTem > 0 ? '+' : '') + fmt(totDiaTem) : '—'}
-                  </td>
-                  <td className={cn('px-5 py-3 text-right font-mono', diffColor(totDiaEid))}>
-                    {totDiaEid !== 0 ? (totDiaEid > 0 ? '+' : '') + fmt(totDiaEid) : '—'}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
+                </thead>
+                <tbody>
+                  {rows.map((r, i) => {
+                    const dTem = (r.PAR_TEMAXIA ?? 0) - (r.AFX_TEMAXIA ?? 0)
+                    const dEid = (r.PAR_EIDI ?? 0) - (r.AFX_EIDI ?? 0)
+                    return (
+                      <tr key={i} className="border-b border-border/50 hover:bg-slate-50">
+                        <td className="px-5 py-3 font-mono text-slate-700">{r.IMERO}</td>
+                        <td className="px-5 py-3 text-right font-mono font-semibold text-orange-500">
+                          {fmt(r.AFX_TEMAXIA ?? 0)}
+                        </td>
+                        <td className="px-5 py-3 text-right font-mono text-orange-400">
+                          {fmt(r.AFX_EIDI ?? 0)}
+                        </td>
+                        <td className="px-5 py-3 text-right font-mono font-semibold text-blue-500">
+                          {fmt(r.PAR_TEMAXIA ?? 0)}
+                        </td>
+                        <td className="px-5 py-3 text-right font-mono text-blue-400">
+                          {fmt(r.PAR_EIDI ?? 0)}
+                        </td>
+                        <td className={cn('px-5 py-3 text-right font-mono font-semibold', diffColor(dTem))}>
+                          {dTem !== 0 ? (dTem > 0 ? '+' : '') + fmt(dTem) : '—'}
+                        </td>
+                        <td className={cn('px-5 py-3 text-right font-mono font-semibold', diffColor(dEid))}>
+                          {dEid !== 0 ? (dEid > 0 ? '+' : '') + fmt(dEid) : '—'}
+                        </td>
+                   
