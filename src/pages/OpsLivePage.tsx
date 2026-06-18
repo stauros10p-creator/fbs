@@ -6,7 +6,9 @@ import { cn } from '@/lib/utils'
 import { RefreshCw, ArrowLeft, Package, Truck } from 'lucide-react'
 
 interface InboundData {
-  afixeis: number
+  afixeis_temaxia: number
+  afixeis_eidi: number
+  afixeis_ogkos: number
   in_temaxia: number
   in_eidi: number
   ret_temaxia: number
@@ -133,16 +135,24 @@ export function OpsLivePage() {
               <SectionHeader icon={Truck} label="Inbound" color="text-orange-600" />
 
               {/* Row 1: Αφίξεις */}
-              <div className="flex gap-4">
-                <KpiCard
-                  label="Αφίξεις ράμπα σήμερα"
-                  value={inb?.afixeis ?? 0}
-                  sub="Inbounds με TransactionTypeCode=10"
-                  color="text-orange-500"
-                  accent="border-orange-400"
-                />
-                <div className="flex-1" />
-                <div className="flex-1" />
+              <div className="panel border-l-2 border-orange-400">
+                <div className="text-xs text-muted uppercase tracking-widest mb-2">Αφίξεις ράμπα σήμερα</div>
+                <div className="flex gap-8">
+                  <div>
+                    <div className="text-2xl font-bold font-mono text-orange-500">{(inb?.afixeis_temaxia ?? 0).toLocaleString('el-GR')}</div>
+                    <div className="text-xs text-muted">τεμάχια</div>
+                  </div>
+                  <div className="w-px bg-border" />
+                  <div>
+                    <div className="text-2xl font-bold font-mono text-orange-400">{(inb?.afixeis_eidi ?? 0).toLocaleString('el-GR')}</div>
+                    <div className="text-xs text-muted">είδη</div>
+                  </div>
+                  <div className="w-px bg-border" />
+                  <div>
+                    <div className="text-2xl font-bold font-mono text-orange-300">{(inb?.afixeis_ogkos ?? 0).toLocaleString('el-GR')}</div>
+                    <div className="text-xs text-muted">λίτρα</div>
+                  </div>
+                </div>
               </div>
 
               {/* Row 2: Θέση IN + Ret */}
