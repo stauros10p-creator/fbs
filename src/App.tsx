@@ -11,6 +11,7 @@ import { OpsOtdPage } from '@/pages/OpsOtdPage'
 import { OpsThroughputPage } from '@/pages/OpsThroughputPage'
 import { OpsDueDatePage } from '@/pages/OpsDueDatePage'
 import { OpsInboundPage } from '@/pages/OpsInboundPage'
+import { OpsAfixeisPage } from '@/pages/OpsAfixeisPage'
 import { OpsLivePage } from '@/pages/OpsLivePage'
 import { CopilotPage } from '@/pages/CopilotPage'
 import { StaffPlanPage } from '@/pages/StaffPlanPage'
@@ -33,6 +34,7 @@ export default function App() {
             <Route path="/ops/throughput" element={<OpsThroughputPage />} />
             <Route path="/ops/duedate" element={<OpsDueDatePage />} />
             <Route path="/ops/inbound" element={<OpsInboundPage />} />
+            <Route path="/ops/afixeis" element={<OpsAfixeisPage />} />
             <Route path="/ops/live" element={<OpsLivePage />} />
             <Route path="/copilot" element={<CopilotPage />} />
             <Route path="/staff-plan" element={<StaffPlanPage />} />
