@@ -34,6 +34,16 @@ interface DailyRow {
   OGKOS: number
 }
 
+interface ComparisonRow {
+  IMERO: string
+  IMERO_SORT: string
+  AFX_TEMAXIA: number
+  AFX_EIDI: number
+  PAR_TEMAXIA: number
+  PAR_EIDI: number
+  DIAFORA: number
+}
+
 interface Snapshot {
   id: number
   generated_at: string
@@ -42,6 +52,7 @@ interface Snapshot {
   rows: InboundRow[]
   detail_rows: DetailRow[]
   daily_rows: DailyRow[]
+  comparison_rows: ComparisonRow[]
 }
 
 function diffColor(v: number | null) {
@@ -59,6 +70,9 @@ export function OpsInboundPage() {
   const [historyDate, setHistoryDate]   = useState('')
   const [selectedHour, setSelectedHour] = useState<string | null>(null)
   const [dailyDays, setDailyDays]       = useState<7 | 14>(14)
+  const [cmpMode, setCmpMode]           = useState<3 | 7 | 14 | 'custom'>(7)
+  const [cmpFrom, setCmpFrom]           = useState('')
+  const [cmpTo, setCmpTo]               = useState('')
 
   async function load(showRefresh = false, date = historyDate) {
     if (showRefresh) setRefreshing(true)
@@ -83,7 +97,16 @@ export function OpsInboundPage() {
   const hourlyRows  = rows.filter(r => r.WRA !== 'Synolo')
   const totalRow    = rows.find(r => r.WRA === 'Synolo')
   const detailRows  = snapshot?.detail_rows ?? []
-  const dailyRows   = (snapshot?.daily_rows ?? []).slice(0, dailyDays)
+  const dailyRows      = (snapshot?.daily_rows ?? []).slice(0, dailyDays)
+  const allComparison  = snapshot?.comparison_rows ?? []
+  const cmpRows = (() => {
+    if (cmpMode === 'custom') {
+      const from = cmpFrom || '2000-01-01'
+      const to   = cmpTo   || '2099-12-31'
+      return allComparison.filter(r => r.IMERO_SORT >= from && r.IMERO_SORT <= to)
+    }
+    return allComparison.slice(0, cmpMode)
+  })()
 
   const chartData = hourlyRows.map(r => ({
     hour:     r.WRA,
@@ -191,6 +214,96 @@ export function OpsInboundPage() {
                         </td>
                         <td className="px-5 py-2 text-right font-mono text-slate-500">
                           {(r.OGKOS ?? 0).toLocaleString('el-GR')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Σύγκριση Αφίξεων vs Παραλαβών */}
+            {allComparison.length > 0 && (
+              <div className="panel p-0 overflow-hidden">
+                <div className="px-5 py-3 bg-slate-50 border-b border-border flex items-center justify-between flex-wrap gap-2">
+                  <span className="font-bold text-slate-800 text-sm">Αφίξεις vs Παραλαβές</span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {([3, 7, 14] as const).map(d => (
+                      <button
+                        key={d}
+                        onClick={() => setCmpMode(d)}
+                        className={cn(
+                          'text-xs px-2.5 py-1 rounded font-mono border transition-colors',
+                          cmpMode === d
+                            ? 'bg-blue-500 text-white border-blue-500'
+                            : 'bg-white text-muted border-border hover:border-blue-300'
+                        )}
+                      >
+                        {d}η
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => setCmpMode('custom')}
+                      className={cn(
+                        'text-xs px-2.5 py-1 rounded border transition-colors',
+                        cmpMode === 'custom'
+                          ? 'bg-blue-500 text-white border-blue-500'
+                          : 'bg-white text-muted border-border hover:border-blue-300'
+                      )}
+                    >
+                      Εύρος
+                    </button>
+                    {cmpMode === 'custom' && (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="date"
+                          value={cmpFrom}
+                          onChange={e => setCmpFrom(e.target.value)}
+                          className="text-xs border border-border rounded px-2 py-1 font-mono"
+                        />
+                        <span className="text-muted text-xs">—</span>
+                        <input
+                          type="date"
+                          value={cmpTo}
+                          onChange={e => setCmpTo(e.target.value)}
+                          className="text-xs border border-border rounded px-2 py-1 font-mono"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-xs text-muted uppercase tracking-wider border-b border-border bg-slate-50/50">
+                      <th className="text-left px-5 py-2 font-medium">Ημερομηνία</th>
+                      <th className="text-right px-5 py-2 font-medium text-orange-600">Αφίξεις τεμ.</th>
+                      <th className="text-right px-5 py-2 font-medium text-orange-400">Αφίξεις είδη</th>
+                      <th className="text-right px-5 py-2 font-medium text-blue-600">Παραλαβές τεμ.</th>
+                      <th className="text-right px-5 py-2 font-medium text-blue-400">Παραλαβές είδη</th>
+                      <th className="text-right px-5 py-2 font-medium">Διαφορά</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cmpRows.map((r, i) => (
+                      <tr key={i} className="border-b border-border/50 hover:bg-slate-50">
+                        <td className="px-5 py-2 font-mono text-slate-700">{r.IMERO}</td>
+                        <td className="px-5 py-2 text-right font-mono font-semibold text-orange-500">
+                          {(r.AFX_TEMAXIA ?? 0).toLocaleString('el-GR')}
+                        </td>
+                        <td className="px-5 py-2 text-right font-mono text-orange-400">
+                          {(r.AFX_EIDI ?? 0).toLocaleString('el-GR')}
+                        </td>
+                        <td className="px-5 py-2 text-right font-mono font-semibold text-blue-500">
+                          {(r.PAR_TEMAXIA ?? 0).toLocaleString('el-GR')}
+                        </td>
+                        <td className="px-5 py-2 text-right font-mono text-blue-400">
+                          {(r.PAR_EIDI ?? 0).toLocaleString('el-GR')}
+                        </td>
+                        <td className={cn(
+                          'px-5 py-2 text-right font-mono font-semibold',
+                          r.DIAFORA > 0 ? 'text-red-500' : r.DIAFORA < 0 ? 'text-green-500' : 'text-muted'
+                        )}>
+                          {r.DIAFORA !== 0 ? (r.DIAFORA > 0 ? '+' : '') + r.DIAFORA.toLocaleString('el-GR') : '—'}
                         </td>
                       </tr>
                     ))}
