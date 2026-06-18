@@ -137,7 +137,7 @@ function LiveOpsWidget() {
   const out = live?.data?.outbound
 
   const items = [
-    { label: 'Αφίξεις ράμπα', value: inb?.afixeis, color: 'text-orange-500' },
+    { label: 'Αφίξεις (τεμ.)', value: inb?.afixeis_temaxia, color: 'text-orange-500' },
     { label: 'Θέση IN (τεμ.)', value: inb?.in_temaxia, color: 'text-blue-500' },
     { label: 'Putaway εκκρ.', value: inb ? inb.inb_temaxia - inb.put_temaxia : null, color: 'text-purple-500' },
     { label: 'Packed σήμερα', value: out?.packed_total, color: 'text-green-500' },
