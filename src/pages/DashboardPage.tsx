@@ -7,9 +7,10 @@ import {
 import {
   Bell, ChevronDown, ChevronLeft, ChevronRight,
   ShoppingCart, Package, Clock, ShieldCheck, Users,
-  ArrowUpRight, CalendarDays, ClipboardList, UserMinus, BarChart2, TrendingUp,
+  ArrowUpRight, CalendarDays, ClipboardList, UserMinus, BarChart2, TrendingUp, Radio,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
 import {
   addDays, toKey, getForDay, staffForOrders, workHours, slaScore,
   UNITS_PER_ORDER, FORECAST, getHourlyChartData,
@@ -123,6 +124,51 @@ function MiniCalendar({ year, month }: { year: number; month: number }) {
   )
 }
 
+// ── Live Ops Widget ────────────────────────────────────────────────────────────
+function LiveOpsWidget() {
+  const [live, setLive] = useState<any>(null)
+
+  useEffect(() => {
+    supabase.from('live_snapshots').select('*').order('created_at', { ascending: false }).limit(1).single()
+      .then(({ data }) => { if (data) setLive(data) })
+  }, [])
+
+  const inb = live?.data?.inbound
+  const out = live?.data?.outbound
+
+  const items = [
+    { label: 'Αφίξεις ράμπα', value: inb?.afixeis, color: 'text-orange-500' },
+    { label: 'Θέση IN (τεμ.)', value: inb?.in_temaxia, color: 'text-blue-500' },
+    { label: 'Putaway εκκρ.', value: inb ? inb.inb_temaxia - inb.put_temaxia : null, color: 'text-purple-500' },
+    { label: 'Packed σήμερα', value: out?.packed_total, color: 'text-green-500' },
+    { label: 'Pending τώρα',  value: out?.pending_total, color: 'text-red-500' },
+    { label: 'Picking ράφι',  value: out?.picking_rafi, color: 'text-sky-500' },
+  ]
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Radio className="w-4 h-4 text-red-500" />
+          <h3 className="text-sm font-semibold text-slate-800">Live Operations</h3>
+          {live && <span className="text-[10px] text-muted font-mono">{live.generated_at}</span>}
+        </div>
+        <Link to="/ops/live" className="text-xs text-blue-600 font-medium hover:underline">Αναλυτικά →</Link>
+      </div>
+      <div className="grid grid-cols-6 divide-x divide-slate-100">
+        {items.map(({ label, value, color }) => (
+          <div key={label} className="px-4 py-3 text-center">
+            <div className="text-[10px] text-slate-400 font-medium mb-1 leading-tight">{label}</div>
+            <div className={`text-lg font-bold font-mono ${color}`}>
+              {value != null ? value.toLocaleString('el-GR') : '—'}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 export function DashboardPage() {
   const alerts    = useAppStore(s => s.alerts)
@@ -186,6 +232,9 @@ export function DashboardPage() {
 
       {/* CONTENT */}
       <div className="flex-1 overflow-y-auto p-6 space-y-5">
+
+        {/* LIVE OPS */}
+        <LiveOpsWidget />
 
         {/* KPI ROW */}
         <div className="grid grid-cols-5 gap-4">
