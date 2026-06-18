@@ -68,8 +68,8 @@ export function OpsAfixeisPage() {
   const totAfxEid  = rows.reduce((s, r) => s + (r.AFX_EIDI ?? 0), 0)
   const totParTem  = rows.reduce((s, r) => s + (r.PAR_TEMAXIA ?? 0), 0)
   const totParEid  = rows.reduce((s, r) => s + (r.PAR_EIDI ?? 0), 0)
-  const totDiaTem  = totAfxTem - totParTem
-  const totDiaEid  = totAfxEid - totParEid
+  const totDiaTem  = totParTem - totAfxTem
+  const totDiaEid  = totParEid - totAfxEid
 
   return (
     <div className="min-h-full">
@@ -139,8 +139,8 @@ export function OpsAfixeisPage() {
               </thead>
               <tbody>
                 {rows.map((r, i) => {
-                  const dTem = (r.AFX_TEMAXIA ?? 0) - (r.PAR_TEMAXIA ?? 0)
-                  const dEid = (r.AFX_EIDI ?? 0) - (r.PAR_EIDI ?? 0)
+                  const dTem = (r.PAR_TEMAXIA ?? 0) - (r.AFX_TEMAXIA ?? 0)
+                  const dEid = (r.PAR_EIDI ?? 0) - (r.AFX_EIDI ?? 0)
                   return (
                   <tr key={i} className="border-b border-border/50 hover:bg-slate-50">
                     <td className="px-5 py-3 font-mono text-slate-700">{r.IMERO}</td>
@@ -188,3 +188,4 @@ export function OpsAfixeisPage() {
     </div>
   )
 }
+
