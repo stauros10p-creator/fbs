@@ -25,8 +25,8 @@ function fmt(n: number) {
 }
 
 function diffColor(v: number) {
-  if (v > 0) return 'text-red-500'
-  if (v < 0) return 'text-green-500'
+  if (v > 0) return 'text-green-500'
+  if (v < 0) return 'text-red-500'
   return 'text-muted'
 }
 
