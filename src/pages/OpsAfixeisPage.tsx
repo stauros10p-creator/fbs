@@ -91,15 +91,15 @@ export function OpsAfixeisPage() {
     <div className="min-h-full">
       <PageHeader
         accent="Operations Module"
-        title="ΑΦΙΞΕΙΣ vs ΠΑΡΑΛΑΒΕΣ"
-        subtitle="Σύγκριση δηλωθέντων αφίξεων με πραγματικές παραλαβές ανά ημέρα"
+        title="AFIXEIS vs PARALAVIES"
+        subtitle="Sygkrisi dilothenton afixeon me pragmatikes paralavies ana imera"
         actions={
           <div className="flex items-center gap-2">
             <button
               onClick={() => navigate('/ops/inbound')}
               className="btn-secondary text-xs flex items-center gap-1.5"
             >
-              <ArrowLeft className="w-3.5 h-3.5" /> Πίσω
+              <ArrowLeft className="w-3.5 h-3.5" /> Back
             </button>
             <button
               onClick={() => load(true)}
@@ -115,9 +115,7 @@ export function OpsAfixeisPage() {
       <div className="p-8 space-y-6">
         <div className="panel flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-2">
-            <label className="text-xs text-muted font-medium uppercase tracking-wider">
-              Από:
-            </label>
+            <label className="text-xs text-muted font-medium uppercase tracking-wider">Apo:</label>
             <input
               type="date"
               value={dateFrom}
@@ -126,9 +124,7 @@ export function OpsAfixeisPage() {
             />
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-xs text-muted font-medium uppercase tracking-wider">
-              Έως:
-            </label>
+            <label className="text-xs text-muted font-medium uppercase tracking-wider">Eos:</label>
             <input
               type="date"
               value={dateTo}
@@ -137,9 +133,7 @@ export function OpsAfixeisPage() {
             />
           </div>
           {genAt && (
-            <span className="text-xs text-muted font-mono ml-auto">
-              {genAt}
-            </span>
+            <span className="text-xs text-muted font-mono ml-auto">{genAt}</span>
           )}
         </div>
 
@@ -149,7 +143,7 @@ export function OpsAfixeisPage() {
 
         {!loading && rows.length === 0 && (
           <div className="text-center py-20 text-muted text-sm">
-            Δεν υπάρχουν δεδομένα για το επιλεγμένο διάστημα.
+            No data for the selected period.
           </div>
         )}
 
@@ -164,13 +158,11 @@ export function OpsAfixeisPage() {
                     tickFormatter={(v: number) => v.toLocaleString('el-GR')}
                     tick={{ fontSize: 11 }}
                   />
-                  <Tooltip
-                    formatter={(v: number) => v.toLocaleString('el-GR')}
-                  />
+                  <Tooltip formatter={(v: number) => v.toLocaleString('el-GR')} />
                   <Legend
                     wrapperStyle={{ fontSize: 12 }}
                     formatter={(value: string) =>
-                      value === 'Afixeis' ? 'Αφίξεις τεμ.' : 'Παραλαβές τεμ.'
+                      value === 'Afixeis' ? 'Afixeis tem.' : 'Paralavies tem.'
                     }
                   />
                   <Bar dataKey="Afixeis" fill="rgba(249,115,22,0.8)" />
@@ -183,21 +175,13 @@ export function OpsAfixeisPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-xs text-muted uppercase tracking-wider border-b border-border bg-slate-50">
-                    <th className="text-left px-5 py-3 font-medium">Ημερομηνία</th>
-                    <th className="text-right px-5 py-3 font-medium text-orange-600">
-                      Αφίξεις τεμ.
-                    </th>
-                    <th className="text-right px-5 py-3 font-medium text-orange-400">
-                      Αφίξεις είδη
-                    </th>
-                    <th className="text-right px-5 py-3 font-medium text-blue-600">
-                      Παραλαβές τεμ.
-                    </th>
-                    <th className="text-right px-5 py-3 font-medium text-blue-400">
-                      Παραλαβές είδη
-                    </th>
-                    <th className="text-right px-5 py-3 font-medium">Διαφορά τεμ.</th>
-                    <th className="text-right px-5 py-3 font-medium">Διαφορά είδη</th>
+                    <th className="text-left px-5 py-3 font-medium">Hmerominia</th>
+                    <th className="text-right px-5 py-3 font-medium text-orange-600">Afixeis tem.</th>
+                    <th className="text-right px-5 py-3 font-medium text-orange-400">Afixeis eidi</th>
+                    <th className="text-right px-5 py-3 font-medium text-blue-600">Paralavies tem.</th>
+                    <th className="text-right px-5 py-3 font-medium text-blue-400">Paralavies eidi</th>
+                    <th className="text-right px-5 py-3 font-medium">Diafora tem.</th>
+                    <th className="text-right px-5 py-3 font-medium">Diafora eidi</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -216,4 +200,38 @@ export function OpsAfixeisPage() {
                         <td className="px-5 py-3 text-right font-mono font-semibold text-blue-500">
                           {fmt(r.PAR_TEMAXIA ?? 0)}
                         </td>
-                        <td className="px-5 py-3 text-right font-mo
+                        <td className="px-5 py-3 text-right font-mono text-blue-400">
+                          {fmt(r.PAR_EIDI ?? 0)}
+                        </td>
+                        <td className={cn('px-5 py-3 text-right font-mono font-semibold', diffColor(dTem))}>
+                          {dTem !== 0 ? (dTem > 0 ? '+' : '') + fmt(dTem) : '-'}
+                        </td>
+                        <td className={cn('px-5 py-3 text-right font-mono font-semibold', diffColor(dEid))}>
+                          {dEid !== 0 ? (dEid > 0 ? '+' : '') + fmt(dEid) : '-'}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  <tr className="bg-slate-100 font-bold border-t-2 border-border">
+                    <td className="px-5 py-3 text-slate-800 uppercase text-xs tracking-wider">Synolo</td>
+                    <td className="px-5 py-3 text-right font-mono text-orange-600">{fmt(totAfxTem)}</td>
+                    <td className="px-5 py-3 text-right font-mono text-orange-400">{fmt(totAfxEid)}</td>
+                    <td className="px-5 py-3 text-right font-mono text-blue-600">{fmt(totParTem)}</td>
+                    <td className="px-5 py-3 text-right font-mono text-blue-400">{fmt(totParEid)}</td>
+                    <td className={cn('px-5 py-3 text-right font-mono', diffColor(totDiaTem))}>
+                      {totDiaTem !== 0 ? (totDiaTem > 0 ? '+' : '') + fmt(totDiaTem) : '-'}
+                    </td>
+                    <td className={cn('px-5 py-3 text-right font-mono', diffColor(totDiaEid))}>
+                      {totDiaEid !== 0 ? (totDiaEid > 0 ? '+' : '') + fmt(totDiaEid) : '-'}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
