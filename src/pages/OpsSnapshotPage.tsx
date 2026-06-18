@@ -1,7 +1,7 @@
 import { useNavigate, Link } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { BarChart2, TrendingUp, Activity, Clock, ChevronRight, CalendarCheck, PackageOpen, Radio } from 'lucide-react'
+import { BarChart2, TrendingUp, Activity, Clock, ChevronRight, CalendarCheck, PackageOpen, Radio, GitCompareArrows } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import type { FC, SVGProps } from 'react'
@@ -68,6 +68,16 @@ const REPORTS: ReportCard[] = [
     accentBg: 'bg-orange-500/10',
     accentText: 'text-orange-500',
     accentBorder: 'hover:border-orange-400/50',
+  },
+  {
+    to: '/ops/afixeis',
+    Icon: GitCompareArrows,
+    label: 'Αφίξεις vs Παραλαβές',
+    description: 'Σύγκριση δηλωθέντων αφίξεων με πραγματικές παραλαβές ανά ημέρα, με επιλογή εύρους ημερομηνιών',
+    tags: ['Αφίξεις', 'Παραλαβές', 'Σύγκριση', 'Εύρος'],
+    accentBg: 'bg-teal-500/10',
+    accentText: 'text-teal-600',
+    accentBorder: 'hover:border-teal-400/50',
   },
   {
     to: '/ops/picking',
