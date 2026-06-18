@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { BarChart2, TrendingUp, Activity, Clock, ChevronRight, CalendarCheck, PackageOpen } from 'lucide-react'
+import { BarChart2, TrendingUp, Activity, Clock, ChevronRight, CalendarCheck, PackageOpen, Radio } from 'lucide-react'
 import type { FC, SVGProps } from 'react'
 
 interface ReportCard {
@@ -45,6 +45,16 @@ const REPORTS: ReportCard[] = [
     accentBg: 'bg-teal-500/10',
     accentText: 'text-teal-600',
     accentBorder: 'hover:border-teal-400/50',
+  },
+  {
+    to: '/ops/live',
+    Icon: Radio,
+    label: 'Live Operations',
+    description: 'Ζωντανά δεδομένα παραλαβών (IN/Ret, Inbound, Putaway) και αποστολών (Packed, Picking, Pending)',
+    tags: ['Live', 'Inbound', 'Outbound', 'Picking', 'Packed'],
+    accentBg: 'bg-red-500/10',
+    accentText: 'text-red-500',
+    accentBorder: 'hover:border-red-400/50',
   },
   {
     to: '/ops/inbound',
