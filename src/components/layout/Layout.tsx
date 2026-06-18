@@ -10,7 +10,7 @@ import {
 
 const OUTBOUND_NAV = [
   { to: '/dashboard',       Icon: LayoutDashboard, label: 'Dashboard'    },
-  { to: '/ops',             Icon: Truck,           label: 'Operations'   },
+  { to: '/ops',             Icon: Truck,           label: 'Operations - Reports' },
   { to: '/team',            Icon: Users,           label: 'Employees'    },
   { to: '/forecast',        Icon: BarChart2,       label: 'Forecast'     },
   { to: '/staff-plan',      Icon: CalendarDays,    label: 'Planning'     },
