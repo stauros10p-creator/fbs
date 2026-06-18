@@ -186,4 +186,5 @@ export function OpsAfixeisPage() {
                         <td className={cn('px-5 py-3 text-right font-mono font-semibold', diffColor(dEid))}>
                           {dEid !== 0 ? (dEid > 0 ? '+' : '') + fmt(dEid) : '—'}
                         </td>
+                      
                    
