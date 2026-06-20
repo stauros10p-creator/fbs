@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
-import { RefreshCw, ArrowLeft } from 'lucide-react'
+import { RefreshCw, ArrowLeft, Package } from 'lucide-react'
 import {
   BarChart,
   Bar,
@@ -36,6 +36,46 @@ function diffColor(v: number) {
   if (v > 0) return 'text-green-500'
   if (v < 0) return 'text-red-500'
   return 'text-muted'
+}
+
+function RetStockWidget() {
+  const [live, setLive] = useState<any>(null)
+
+  useEffect(() => {
+    supabase.from('live_snapshots').select('*').order('created_at', { ascending: false }).limit(1).single()
+      .then(({ data }) => { if (data) setLive(data) })
+  }, [])
+
+  const inb = live?.data?.inbound
+  if (!inb) return null
+
+  const retTem = inb.ret_temaxia ?? 0
+  const retEid = inb.ret_eidi ?? 0
+
+  return (
+    <div className="panel border border-purple-200 bg-purple-50/40">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-9 h-9 rounded-lg bg-purple-100 flex items-center justify-center">
+          <Package className="w-4 h-4 text-purple-600" />
+        </div>
+        <div>
+          <div className="text-xs text-muted font-mono uppercase tracking-wider">Current RET Stock</div>
+          <div className="text-sm font-semibold text-slate-700">Location 24252 - tora</div>
+        </div>
+        {live && <span className="text-[10px] text-muted font-mono ml-auto">{live.generated_at}</span>}
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-white rounded-lg border border-purple-100 px-5 py-4 text-center">
+          <div className="text-2xl font-bold font-mono text-purple-700">{retTem.toLocaleString('el-GR')}</div>
+          <div className="text-xs text-muted mt-1 uppercase tracking-wider">Temaxia</div>
+        </div>
+        <div className="bg-white rounded-lg border border-purple-100 px-5 py-4 text-center">
+          <div className="text-2xl font-bold font-mono text-purple-500">{retEid.toLocaleString('el-GR')}</div>
+          <div className="text-xs text-muted mt-1 uppercase tracking-wider">Eidi</div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export function OpsEpistrofesPage() {
@@ -227,6 +267,8 @@ export function OpsEpistrofesPage() {
             </div>
           </div>
         )}
+
+        <RetStockWidget />
       </div>
     </div>
   )
