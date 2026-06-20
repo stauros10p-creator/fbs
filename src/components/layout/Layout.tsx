@@ -5,8 +5,9 @@ import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, Truck, Users, BarChart2, CalendarDays,
   ShieldCheck, FileBarChart, Bell, Cpu, Settings,
-  Package, ChevronDown, ChevronRight, PackageOpen, GitCompareArrows, RotateCcw,
+  Package, ChevronDown, ChevronRight, PackageOpen, GitCompareArrows, RotateCcw, LogOut,
 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 
 const OUTBOUND_NAV = [
   { to: '/dashboard',       Icon: LayoutDashboard, label: 'Dashboard'    },
@@ -150,6 +151,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <div className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
             Main Warehouse Athens, GR
           </div>
+          <button
+            onClick={() => supabase.auth.signOut()}
+            className="mt-3 w-full flex items-center gap-2 text-white/30 hover:text-white/70 text-[11px] transition-colors"
+          >
+            <LogOut className="w-3 h-3" /> Sign out
+          </button>
         </div>
       </aside>
 
