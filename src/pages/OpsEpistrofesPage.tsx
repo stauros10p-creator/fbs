@@ -18,10 +18,10 @@ import {
 interface RetRow {
   IMERO: string
   IMERO_SORT: string
-  DIL_TEMAXIA: number
-  DIL_EIDI: number
-  PAR_TEMAXIA: number
-  PAR_EIDI: number
+  INB_TEMAXIA: number
+  INB_EIDI: number
+  PUT_TEMAXIA: number
+  PUT_EIDI: number
 }
 
 function today() {
@@ -44,7 +44,11 @@ export function OpsEpistrofesPage() {
   const [genAt, setGenAt] = useState('')
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [dateFrom, setDateFrom] = useState(today())
+  const [dateFrom, setDateFrom] = useState(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 13)
+    return d.toISOString().slice(0, 10)
+  })
   const [dateTo, setDateTo] = useState(today())
 
   async function load(showRefresh = false) {
@@ -53,7 +57,7 @@ export function OpsEpistrofesPage() {
     const { data, error } = await supabase
       .from('inbound_snapshots')
       .select('generated_at, ret_rows')
-      .order('created_at', { ascending: false })
+      .order('generated_at', { ascending: false })
       .limit(1)
       .single()
     if (!error && data) {
@@ -72,25 +76,25 @@ export function OpsEpistrofesPage() {
     .filter((r) => r.IMERO_SORT >= dateFrom && r.IMERO_SORT <= dateTo)
     .sort((a, b) => a.IMERO_SORT.localeCompare(b.IMERO_SORT))
 
-  const totDilTem = rows.reduce((s, r) => s + (r.DIL_TEMAXIA ?? 0), 0)
-  const totDilEid = rows.reduce((s, r) => s + (r.DIL_EIDI ?? 0), 0)
-  const totParTem = rows.reduce((s, r) => s + (r.PAR_TEMAXIA ?? 0), 0)
-  const totParEid = rows.reduce((s, r) => s + (r.PAR_EIDI ?? 0), 0)
-  const totDiaTem = totParTem - totDilTem
-  const totDiaEid = totParEid - totDilEid
+  const totInbTem = rows.reduce((s, r) => s + (r.INB_TEMAXIA ?? 0), 0)
+  const totInbEid = rows.reduce((s, r) => s + (r.INB_EIDI ?? 0), 0)
+  const totPutTem = rows.reduce((s, r) => s + (r.PUT_TEMAXIA ?? 0), 0)
+  const totPutEid = rows.reduce((s, r) => s + (r.PUT_EIDI ?? 0), 0)
+  const totDiaTem = totPutTem - totInbTem
+  const totDiaEid = totPutEid - totInbEid
 
   const chartData = rows.map((r) => ({
     name: r.IMERO,
-    Dilotheises: r.DIL_TEMAXIA ?? 0,
-    Paralavies: r.PAR_TEMAXIA ?? 0,
+    Inbound: r.INB_TEMAXIA ?? 0,
+    Putaway: r.PUT_TEMAXIA ?? 0,
   }))
 
   return (
     <div className="min-h-full">
       <PageHeader
         accent="Operations Module"
-        title="EPISTROFES: DIL vs PARALAVIES"
-        subtitle="Sygkrisi dilothenton epistrofon me pragmatikes paralavies ret ana imera"
+        title="EPISTROFES: Inbound vs Putaway"
+        subtitle="Daily inbound kai putaway epistrofon ana imera (location 24252)"
         actions={
           <div className="flex items-center gap-2">
             <button
@@ -157,14 +161,9 @@ export function OpsEpistrofesPage() {
                     tick={{ fontSize: 11 }}
                   />
                   <Tooltip formatter={(v: number) => v.toLocaleString('el-GR')} />
-                  <Legend
-                    wrapperStyle={{ fontSize: 12 }}
-                    formatter={(value: string) =>
-                      value === 'Dilotheises' ? 'Dilotheises tem.' : 'Paralavies Ret tem.'
-                    }
-                  />
-                  <Bar dataKey="Dilotheises" fill="rgba(139,92,246,0.8)" />
-                  <Bar dataKey="Paralavies" fill="rgba(20,184,166,0.8)" />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="Inbound" fill="rgba(139,92,246,0.8)" />
+                  <Bar dataKey="Putaway" fill="rgba(20,184,166,0.8)" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -174,32 +173,32 @@ export function OpsEpistrofesPage() {
                 <thead>
                   <tr className="text-xs text-muted uppercase tracking-wider border-b border-border bg-slate-50">
                     <th className="text-left px-5 py-3 font-medium">Hmerominia</th>
-                    <th className="text-right px-5 py-3 font-medium" style={{ color: '#7c3aed' }}>Dil. tem.</th>
-                    <th className="text-right px-5 py-3 font-medium" style={{ color: '#a78bfa' }}>Dil. eidi</th>
-                    <th className="text-right px-5 py-3 font-medium" style={{ color: '#0d9488' }}>Par. Ret tem.</th>
-                    <th className="text-right px-5 py-3 font-medium" style={{ color: '#5eead4' }}>Par. Ret eidi</th>
+                    <th className="text-right px-5 py-3 font-medium" style={{ color: '#7c3aed' }}>Inb. tem.</th>
+                    <th className="text-right px-5 py-3 font-medium" style={{ color: '#a78bfa' }}>Inb. eidi</th>
+                    <th className="text-right px-5 py-3 font-medium" style={{ color: '#0d9488' }}>Put. tem.</th>
+                    <th className="text-right px-5 py-3 font-medium" style={{ color: '#5eead4' }}>Put. eidi</th>
                     <th className="text-right px-5 py-3 font-medium">Diafora tem.</th>
                     <th className="text-right px-5 py-3 font-medium">Diafora eidi</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((r, i) => {
-                    const dTem = (r.PAR_TEMAXIA ?? 0) - (r.DIL_TEMAXIA ?? 0)
-                    const dEid = (r.PAR_EIDI ?? 0) - (r.DIL_EIDI ?? 0)
+                    const dTem = (r.PUT_TEMAXIA ?? 0) - (r.INB_TEMAXIA ?? 0)
+                    const dEid = (r.PUT_EIDI ?? 0) - (r.INB_EIDI ?? 0)
                     return (
                       <tr key={i} className="border-b border-border/50 hover:bg-slate-50">
                         <td className="px-5 py-3 font-mono text-slate-700">{r.IMERO}</td>
                         <td className="px-5 py-3 text-right font-mono font-semibold" style={{ color: '#7c3aed' }}>
-                          {fmt(r.DIL_TEMAXIA ?? 0)}
+                          {fmt(r.INB_TEMAXIA ?? 0)}
                         </td>
                         <td className="px-5 py-3 text-right font-mono" style={{ color: '#a78bfa' }}>
-                          {fmt(r.DIL_EIDI ?? 0)}
+                          {fmt(r.INB_EIDI ?? 0)}
                         </td>
                         <td className="px-5 py-3 text-right font-mono font-semibold" style={{ color: '#0d9488' }}>
-                          {fmt(r.PAR_TEMAXIA ?? 0)}
+                          {fmt(r.PUT_TEMAXIA ?? 0)}
                         </td>
                         <td className="px-5 py-3 text-right font-mono" style={{ color: '#5eead4' }}>
-                          {fmt(r.PAR_EIDI ?? 0)}
+                          {fmt(r.PUT_EIDI ?? 0)}
                         </td>
                         <td className={cn('px-5 py-3 text-right font-mono font-semibold', diffColor(dTem))}>
                           {dTem !== 0 ? (dTem > 0 ? '+' : '') + fmt(dTem) : '-'}
@@ -212,10 +211,10 @@ export function OpsEpistrofesPage() {
                   })}
                   <tr className="bg-slate-100 font-bold border-t-2 border-border">
                     <td className="px-5 py-3 text-slate-800 uppercase text-xs tracking-wider">Synolo</td>
-                    <td className="px-5 py-3 text-right font-mono" style={{ color: '#7c3aed' }}>{fmt(totDilTem)}</td>
-                    <td className="px-5 py-3 text-right font-mono" style={{ color: '#a78bfa' }}>{fmt(totDilEid)}</td>
-                    <td className="px-5 py-3 text-right font-mono" style={{ color: '#0d9488' }}>{fmt(totParTem)}</td>
-                    <td className="px-5 py-3 text-right font-mono" style={{ color: '#5eead4' }}>{fmt(totParEid)}</td>
+                    <td className="px-5 py-3 text-right font-mono" style={{ color: '#7c3aed' }}>{fmt(totInbTem)}</td>
+                    <td className="px-5 py-3 text-right font-mono" style={{ color: '#a78bfa' }}>{fmt(totInbEid)}</td>
+                    <td className="px-5 py-3 text-right font-mono" style={{ color: '#0d9488' }}>{fmt(totPutTem)}</td>
+                    <td className="px-5 py-3 text-right font-mono" style={{ color: '#5eead4' }}>{fmt(totPutEid)}</td>
                     <td className={cn('px-5 py-3 text-right font-mono', diffColor(totDiaTem))}>
                       {totDiaTem !== 0 ? (totDiaTem > 0 ? '+' : '') + fmt(totDiaTem) : '-'}
                     </td>
