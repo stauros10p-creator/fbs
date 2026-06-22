@@ -1,43 +1,49 @@
-import { useState, useMemo, Fragment } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
-  Search, Plus, Coffee, UserX, Upload, Star,
-  TrendingUp, Edit2,
+  Search, Plus, Coffee, UserX, X, TrendingUp, TrendingDown,
+  Minus, Edit2, AlertTriangle, Upload, Zap,
 } from 'lucide-react'
+import { SCHEDULE_DAYS, classifyShift } from '@/lib/schedule'
+import { useWeekShifts } from '@/hooks'
+import { ScheduleImportModal } from '@/components/team/ScheduleImportModal'
+import type { Shift } from '@/types'
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  ReferenceLine, CartesianGrid, PieChart, Pie, Cell,
+  LineChart, Line, XAxis, YAxis, Tooltip,
+  ResponsiveContainer, ReferenceLine, CartesianGrid,
 } from 'recharts'
 import { useAppStore } from '@/store'
+import { supabase } from '@/lib/supabase'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { RoleBadge } from '@/components/ui/Badge'
-import { ROLE_CONFIG, STATUS_CONFIG } from '@/types'
-import type { Employee, EmployeeRole, EmployeeStatus, Shift } from '@/types'
+import { ROLE_CONFIG, STATUS_CONFIG, SKILL_LABELS } from '@/types'
+import type { Employee, EmployeeRole, EmployeeStatus } from '@/types'
 import { initials, cn } from '@/lib/utils'
-import { useUpdateEmployeeStatus, useRequestBreak, useWeekShifts } from '@/hooks'
+import { useUpdateEmployeeStatus, useRequestBreak } from '@/hooks'
 import { EmployeeModal } from '@/components/team/EmployeeModal'
-import { ScheduleImportModal } from '@/components/team/ScheduleImportModal'
 import toast from 'react-hot-toast'
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Productivity types ────────────────────────────────────────────────────────
+interface ProdRow      { ONOMA: string; ORDERS: number; ORES: number; UPH: number }
+interface ProdMonthRow { ONOMA: string; UPH_AVG: number; ORDERS_AVG: number }
+interface ProdSnapshot {
+  generated_at:           string
+  pickers_today:          ProdRow[]
+  pickers_month:          ProdMonthRow[]
+  packers_today:          ProdRow[]
+  packers_month:          ProdMonthRow[]
+  team_avg_pickers_today: number | null
+  team_avg_pickers_month: number | null
+  team_avg_packers_today: number | null
+  team_avg_packers_month: number | null
+}
+
+// ── Constants ────────────────────────────────────────────────────────────────
 
 const ROLE_BENCHMARK: Record<string, number> = {
   operator: 190, picker: 77, packer: 80, sorter: 150, transporter: 120,
 }
-const MONTHS_SHORT = ['Ιαν','Φεβ','Μαρ','Απρ','Μαϊ','Ιουν','Ιουλ','Αυγ','Σεπ','Οκτ','Νοε','Δεκ']
 
-const SKILL_LABELS: Record<string, string> = {
-  '5': 'Trainer', '4': 'Expert', '3': 'Independent', '2': 'Assisted', '1': 'In Training',
-}
-const RELIABILITY_LABELS: Record<number, string> = {
-  5: 'Πάντα σταθερός', 4: 'Σχεδόν πάντα', 3: 'Με διακυμάνσεις', 2: 'Θέλει παρακολούθηση', 1: 'Νέος',
-}
-const AUTONOMY_LABELS: Record<number, string> = {
-  5: 'Βοηθάει κι άλλους', 4: 'Χωρίς επίβλεψη', 3: 'Πού και πού βοήθεια', 2: 'Συχνή καθοδήγηση', 1: 'Εκπαίδευση',
-}
-const ALL_ROLES: EmployeeRole[] = ['picker', 'packer', 'operator', 'sorter', 'transporter']
-const SLA_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#a855f7']
-const PER_PAGE   = 20
-const COLS       = 4
+const MONTHS_SHORT = ['Ιαν', 'Φεβ', 'Μαρ', 'Απρ', 'Μαϊ', 'Ιουν', 'Ιουλ', 'Αυγ', 'Σεπ', 'Οκτ', 'Νοε', 'Δεκ']
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   working:    { bg: 'bg-green-50 border-green-200',   text: 'text-green-600',  label: 'Εργάζεται' },
@@ -47,457 +53,414 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }>
   off:        { bg: 'bg-slate-50 border-slate-200',   text: 'text-slate-400',  label: 'Ρεπό' },
   redeployed: { bg: 'bg-purple-50 border-purple-200', text: 'text-purple-600', label: 'Ανάθεση' },
 }
+
 const STATUS_TABS: { key: 'all' | EmployeeStatus; label: string }[] = [
-  { key: 'all',      label: 'Όλοι' },
-  { key: 'working',  label: 'Εργάζονται' },
-  { key: 'break',    label: 'Διάλειμμα' },
-  { key: 'sick',     label: 'Άρρωστοι' },
-  { key: 'vacation', label: 'Άδεια' },
-  { key: 'off',      label: 'Ρεπό' },
+  { key: 'all',        label: 'Όλοι' },
+  { key: 'working',   label: 'Εργάζονται' },
+  { key: 'break',     label: 'Διάλειμμα' },
+  { key: 'sick',      label: 'Άρρωστοι' },
+  { key: 'vacation',  label: 'Άδεια' },
+  { key: 'off',       label: 'Ρεπό' },
 ]
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Mock data helpers (seeded by employee id for consistency) ─────────────────
 
 function seededVal(seed: number, i: number): number {
-  return Math.sin(seed * 9301 + i * 49297 + 233) * 0.5 + 0.5
+  return (Math.sin(seed * 9301 + i * 49297 + 233) * 0.5 + 0.5)
 }
+
 function empSeed(emp: Employee): number {
   return emp.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0)
 }
+
 function getEmpBaseline(emp: Employee): number {
   return emp.productivity?.find(p => p.role === emp.primary_role)?.units_per_hour
-    ?? ROLE_BENCHMARK[emp.primary_role] ?? 100
-}
-function getProductivityPct(emp: Employee): number {
-  return Math.round((1 + (seededVal(empSeed(emp), 99) - 0.5) * 0.2) * 100)
-}
-function getUPH(emp: Employee): number {
-  return Math.round(getEmpBaseline(emp) * getProductivityPct(emp) / 100)
-}
-function getAttendancePct(emp: Employee): number {
-  return Math.round(85 + seededVal(empSeed(emp), 200) * 15)
-}
-function getReliability(emp: Employee): number {
-  // Seeded until we add a reliability column
-  const offset = Math.round((seededVal(empSeed(emp), 301) - 0.5) * 2)
-  return Math.max(1, Math.min(5, parseInt(emp.skill_level) + offset))
-}
-function getAutonomy(emp: Employee): number {
-  // Use real DB value if available, else seed
-  if (emp.autonomy != null) return Math.max(1, Math.min(5, emp.autonomy))
-  const offset = Math.round((seededVal(empSeed(emp), 401) - 0.5) * 2)
-  return Math.max(1, Math.min(5, parseInt(emp.skill_level) + offset))
-}
-function getRoleSkills(emp: Employee): { role: EmployeeRole; level: number }[] {
-  const primaryLevel = parseInt(emp.skill_level)
-  const skills: { role: EmployeeRole; level: number }[] = [
-    { role: emp.primary_role, level: primaryLevel },
-  ]
-  if (emp.secondary_role && emp.secondary_role !== emp.primary_role) {
-    const offset = Math.floor(seededVal(empSeed(emp), 77) * 2)
-    skills.push({ role: emp.secondary_role, level: Math.max(1, primaryLevel - offset) })
-  }
-  if (emp.tertiary_role && emp.tertiary_role !== emp.primary_role && emp.tertiary_role !== emp.secondary_role) {
-    const offset = Math.floor(seededVal(empSeed(emp), 88) * 2) + 1
-    skills.push({ role: emp.tertiary_role, level: Math.max(1, primaryLevel - offset) })
-  }
-  return skills
-}
-function getShiftTeam(emp: Employee): string {
-  if (emp.shift_team === 'A') return 'Team A'
-  if (emp.shift_team === 'B') return 'Team B'
-  return '—'
+    ?? ROLE_BENCHMARK[emp.primary_role]
+    ?? 100
 }
 
-function getFlexibility(emp: Employee): number {
-  // Use real DB value if available, else count roles
-  if (emp.flexibility != null) return Math.max(1, Math.min(5, emp.flexibility))
-  return Math.min(5, getRoleSkills(emp).length)
-}
-function getWorkforceScore(emp: Employee): number {
-  const prod = Math.min(100, getProductivityPct(emp))
-  const rel  = getReliability(emp)
-  const aut  = getAutonomy(emp)
-  const flex = getFlexibility(emp)
-  return Math.round(prod * 0.40 + (rel/5*100) * 0.25 + (aut/5*100) * 0.20 + (flex/5*100) * 0.15)
-}
-function getHireDate(emp: Employee): string {
-  if (emp.hire_date) {
-    const [y, m, d] = emp.hire_date.split('-')
-    return `${d}/${m}/${y}`
-  }
-  return '—'
-}
-function getHistory30(emp: Employee) {
-  const seed = empSeed(emp); const now = new Date()
-  return Array.from({ length: 30 }, (_, i) => {
-    const d = new Date(now); d.setDate(d.getDate() - (29 - i))
-    return { day: `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`, pct: Math.max(40, Math.round((1 + (seededVal(seed,i)-0.5)*0.3)*100)) }
+/** 12-week productivity history */
+function getProductivityHistory(emp: Employee) {
+  const seed = empSeed(emp)
+  const baseline = getEmpBaseline(emp)
+  const now = new Date()
+  return Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(now)
+    d.setDate(d.getDate() - (11 - i) * 7)
+    const noise = (seededVal(seed, i) - 0.5) * 0.2   // ±10%
+    return {
+      week: `W${i + 1}`,
+      label: `${MONTHS_SHORT[d.getMonth()]} ${d.getDate()}`,
+      uph: Math.round(baseline * (1 + noise)),
+      benchmark: baseline,
+    }
   })
 }
-function getSummary(emp: Employee) {
-  const s = empSeed(emp)
-  return {
-    totalShifts: 40+(s%30), hoursWorked: 300+(s%200),
-    breakTime: `${20+(s%15)}h ${((s%4)*15).toString().padStart(2,'0')}m`,
-    overtime:  `${s%20}h ${((s%4)*15).toString().padStart(2,'0')}m`,
-    absences:  s%4===0 ? 1 : 0,
-  }
-}
-function getSla(emp: Employee) {
-  const s = empSeed(emp)
-  return [
-    { name: 'Due Date',  value: parseFloat(`${90+(s%10)}.${s%9}`),        color: SLA_COLORS[0] },
-    { name: 'Same Day',  value: parseFloat(`${88+((s+1)%12)}.${(s+1)%8}`),color: SLA_COLORS[1] },
-    { name: 'Intra Day', value: parseFloat(`${85+((s+2)%13)}.${(s+2)%7}`),color: SLA_COLORS[2] },
-    { name: 'Bulky',     value: parseFloat(`${82+((s+3)%15)}.${(s+3)%6}`),color: SLA_COLORS[3] },
-  ]
+
+/** Simulated yesterday UPH */
+function getYesterdayUPH(emp: Employee): number {
+  const baseline = getEmpBaseline(emp)
+  const noise = (seededVal(empSeed(emp), 99) - 0.5) * 0.2
+  return Math.round(baseline * (1 + noise))
 }
 
-// ── StarRating ────────────────────────────────────────────────────────────────
 
-function StarRating({ level, small = false }: { level: number; small?: boolean }) {
-  const cls = small ? 'w-3 h-3' : 'w-3.5 h-3.5'
-  return (
-    <div className="flex gap-0.5">
-      {[1,2,3,4,5].map(i => (
-        <Star key={i} className={cn(cls, i <= level ? 'text-amber-400 fill-amber-400' : 'text-slate-200 fill-slate-200')} />
-      ))}
-    </div>
-  )
-}
+// ── EmployeeDetailPanel ───────────────────────────────────────────────────────
 
-// ── EmployeeCard ──────────────────────────────────────────────────────────────
-
-function EmployeeCard({ emp, isSelected, weekShifts, todayIdx, onClick }: {
+function EmployeeDetailPanel({
+  emp, teamAvgYesterday, teamQ3Avg, weekShifts, prodSnap, onEdit, onClose, onBreak, onSick,
+}: {
   emp: Employee
-  isSelected: boolean
+  teamAvgYesterday: number
+  teamQ3Avg: number
   weekShifts: Record<string, (Shift | null)[]> | undefined
-  todayIdx: number
-  onClick: () => void
-}) {
-  const cfg    = STATUS_CONFIG[emp.current_status]
-  const color  = ROLE_CONFIG[emp.primary_role]?.color ?? '#6b7280'
-  const shift  = weekShifts?.[emp.id]?.[todayIdx]
-  const shiftS = shift ? `${shift.start_time.slice(0,5)}-${shift.end_time.slice(0,5)}` : '—'
-  const score  = getWorkforceScore(emp)
-  const uph    = getUPH(emp)
-  const skill  = parseInt(emp.skill_level)
-
-  return (
-    <div
-      onClick={onClick}
-      className={cn(
-        'bg-white rounded-xl border-2 p-4 cursor-pointer transition-all duration-150 select-none flex flex-col',
-        'hover:shadow-md',
-        isSelected
-          ? 'border-blue-400 shadow-lg ring-2 ring-blue-100'
-          : 'border-slate-200 hover:border-slate-300',
-      )}
-    >
-      {/* Avatar + Name + Status */}
-      <div className="flex items-start gap-2.5 mb-3">
-        <div
-          className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
-          style={{ background: `${color}20`, color }}
-        >{initials(emp.full_name)}</div>
-        <div className="flex-1 min-w-0">
-          <div className="font-semibold text-slate-800 text-sm truncate leading-tight">{emp.full_name}</div>
-          <div className="text-[10px] text-slate-400 font-mono">{emp.employee_code}</div>
-        </div>
-        <div className="flex items-center gap-1 mt-0.5 flex-shrink-0">
-          <div className={cn('w-1.5 h-1.5 rounded-full', cfg?.dot ?? 'bg-slate-300')} />
-          <span className="text-[10px] text-slate-500 hidden xl:inline">{cfg?.label}</span>
-        </div>
-      </div>
-
-      {/* Roles */}
-      <div className="flex gap-1 flex-wrap mb-2.5">
-        <RoleBadge role={emp.primary_role} />
-        {emp.secondary_role && <RoleBadge role={emp.secondary_role} />}
-      </div>
-
-      {/* Skill */}
-      <div className="flex items-center gap-1.5 mb-3">
-        <StarRating level={skill} small />
-        <span className="text-[11px] font-semibold text-slate-700">{SKILL_LABELS[emp.skill_level] ?? 'Expert'}</span>
-      </div>
-
-      {/* Footer: score + UPH + shift */}
-      <div className="mt-auto flex items-center justify-between pt-2.5 border-t border-slate-100 text-xs">
-        <div className="flex items-center gap-1">
-          <span className="text-amber-500">🏆</span>
-          <span className="font-bold font-mono text-slate-800">{score}</span>
-          <span className="text-slate-400 text-[10px]">/100</span>
-        </div>
-        <div className="font-mono text-slate-600">{uph}/h</div>
-        <div className="font-mono text-[10px] text-slate-400">{shiftS}</div>
-      </div>
-    </div>
-  )
-}
-
-// ── DetailPanel ───────────────────────────────────────────────────────────────
-
-type Tab = 'overview' | 'skills' | 'performance' | 'attendance' | 'activity'
-
-function MetricRow({ label, level, sublabel }: { label: string; level: number; sublabel?: string }) {
-  return (
-    <div className="flex items-center gap-3">
-      <div className="w-24 text-xs text-slate-500 flex-shrink-0">{label}</div>
-      <StarRating level={level} />
-      <span className="text-[10px] text-slate-400 ml-1 truncate">{sublabel}</span>
-    </div>
-  )
-}
-
-function DetailPanel({ emp, weekShifts, todayIdx, onEdit, onBreak, onSick }: {
-  emp: Employee
-  weekShifts: Record<string, (Shift | null)[]> | undefined
-  todayIdx: number
+  prodSnap: ProdSnapshot | null
   onEdit: () => void
-  onBreak: () => void
-  onSick: () => void
+  onClose: () => void
+  onBreak: () => Promise<void>
+  onSick: () => Promise<void>
 }) {
-  const [tab, setTab] = useState<Tab>('overview')
+  const history    = getProductivityHistory(emp)
+  const yUPH       = getYesterdayUPH(emp)
+  const benchmark  = getEmpBaseline(emp)
+  const empShifts  = weekShifts?.[emp.id] ?? null
+  const q3Avg      = Math.round(history.reduce((a, b) => a + b.uph, 0) / history.length)
+  const diffYest   = Math.round(((yUPH - teamAvgYesterday) / teamAvgYesterday) * 100)
+  const diffQ3     = Math.round(((q3Avg - teamQ3Avg) / teamQ3Avg) * 100)
+  const cfg        = STATUS_CONFIG[emp.current_status]
+  const trend      = history[11].uph - history[8].uph
+  const isAlert    = yUPH < benchmark * 0.85
 
-  const shift    = weekShifts?.[emp.id]?.[todayIdx]
-  const shiftStr = shift ? `${shift.start_time.slice(0,5)} - ${shift.end_time.slice(0,5)}` : '—'
-  const cfg      = STATUS_CONFIG[emp.current_status]
-  const history  = getHistory30(emp)
-  const prodPct  = getProductivityPct(emp)
-  const uph      = getUPH(emp)
-  const score    = getWorkforceScore(emp)
-  const rel      = getReliability(emp)
-  const aut      = getAutonomy(emp)
-  const flex     = getFlexibility(emp)
-  const summary  = getSummary(emp)
-  const sla      = getSla(emp)
-  const roleSkills = getRoleSkills(emp)
+  const maxUPH = Math.max(yUPH, teamAvgYesterday, benchmark, 1)
 
-  const TABS: { key: Tab; label: string }[] = [
-    { key: 'overview',    label: 'Overview' },
-    { key: 'skills',      label: 'Skills' },
-    { key: 'performance', label: 'Performance' },
-    { key: 'attendance',  label: 'Attendance' },
-    { key: 'activity',    label: 'Activity Log' },
+  // ── Live productivity from WMS ──────────────────────────────────────────────
+  const isPicker = emp.primary_role === 'picker'
+  const isPacker = emp.primary_role === 'packer'
+  const normName = (s: string) => s.trim().toLowerCase()
+  const empNorm  = normName(emp.full_name)
+
+  const todayRows  = isPicker ? prodSnap?.pickers_today  : isPacker ? prodSnap?.packers_today  : []
+  const monthRows  = isPicker ? prodSnap?.pickers_month  : isPacker ? prodSnap?.packers_month  : []
+  const teamToday  = isPicker ? prodSnap?.team_avg_pickers_today : isPacker ? prodSnap?.team_avg_packers_today : null
+  const teamMonth  = isPicker ? prodSnap?.team_avg_pickers_month : isPacker ? prodSnap?.team_avg_packers_month : null
+
+  const todayRow  = todayRows?.find(r => normName(r.ONOMA) === empNorm) ?? null
+  const monthRow  = monthRows?.find(r => normName(r.ONOMA) === empNorm) ?? null
+
+  const liveUPH   = todayRow?.UPH ?? null
+  const monthUPH  = monthRow?.UPH_AVG ?? null
+  const hasProd   = (isPicker || isPacker) && prodSnap !== null
+
+  const diffVsTeamToday = liveUPH && teamToday
+    ? Math.round(((liveUPH - teamToday) / teamToday) * 100) : null
+  const diffVsTeamMonth = monthUPH && teamMonth
+    ? Math.round(((monthUPH - teamMonth) / teamMonth) * 100) : null
+
+  const bars = [
+    { label: 'Εργαζόμενος χθες', value: yUPH,               color: '#3b82f6' },
+    { label: 'Μέσος ομάδας χθες', value: teamAvgYesterday,   color: '#94a3b8' },
+    { label: 'Benchmark ρόλου',   value: benchmark,           color: '#e2e8f0' },
   ]
 
   return (
-    <div className="bg-slate-50 rounded-xl border border-blue-200 shadow-inner p-5 mb-4">
+    <div className="w-80 flex-shrink-0 bg-white rounded-xl border border-slate-200 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="bg-white rounded-xl border border-slate-200 px-5 py-3.5 mb-4 flex items-center gap-4 flex-wrap">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 flex-shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
-            style={{ background: `${ROLE_CONFIG[emp.primary_role]?.color ?? '#6b7280'}20`, color: ROLE_CONFIG[emp.primary_role]?.color ?? '#6b7280' }}>
+          <div
+            className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
+            style={{
+              background: `${ROLE_CONFIG[emp.primary_role]?.color ?? '#6b7280'}18`,
+              color: ROLE_CONFIG[emp.primary_role]?.color ?? '#6b7280',
+            }}
+          >
             {initials(emp.full_name)}
           </div>
           <div>
-            <div className="font-bold text-slate-800">{emp.full_name}</div>
-            <div className="text-[10px] text-slate-400 font-mono">{emp.employee_code}</div>
+            <div className="font-semibold text-slate-800 text-sm leading-tight">{emp.full_name}</div>
+            <div className="text-xs text-slate-400 font-mono">{emp.employee_code}</div>
           </div>
         </div>
-        <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
-          Primary <RoleBadge role={emp.primary_role} />
+        <button onClick={onClose} className="p-1 rounded text-slate-400 hover:text-slate-600 transition-colors">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-5">
+
+        {/* Status + Skill */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className={cn('w-2 h-2 rounded-full', cfg?.dot ?? 'bg-slate-300')} />
+            <span className="text-xs font-medium text-slate-600">{cfg?.label ?? emp.current_status}</span>
+          </div>
+          <div className="flex gap-0.5" title={SKILL_LABELS[emp.skill_level]}>
+            {[1, 2, 3, 4, 5].map(n => (
+              <div key={n} className={cn('w-2.5 h-2.5 rounded-sm', parseInt(emp.skill_level) >= n ? 'bg-green-400' : 'bg-slate-100')} />
+            ))}
+          </div>
         </div>
-        {emp.secondary_role && (
-          <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
-            Secondary <RoleBadge role={emp.secondary_role} />
+
+        {/* Roles */}
+        <div className="flex gap-2 flex-wrap">
+          <RoleBadge role={emp.primary_role} />
+          {emp.secondary_role && <RoleBadge role={emp.secondary_role} />}
+        </div>
+
+        {/* Alert banner */}
+        {isAlert && (
+          <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+            <span className="text-xs text-red-600">Απόδοση χθες &gt;15% κάτω από benchmark</span>
           </div>
         )}
-        <div className="text-xs text-slate-500">
-          <span className="text-slate-400 mr-1">Team</span>
-          <span className="font-medium">{getShiftTeam(emp)}</span>
+
+        {/* Yesterday KPIs */}
+        <div>
+          <div className="text-[10px] font-mono uppercase tracking-widest text-slate-400 mb-2">Χθεσινή vs Ομάδα</div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="bg-slate-50 rounded-lg p-2 text-center">
+              <div className="text-xl font-bold font-mono text-slate-800">{yUPH}</div>
+              <div className="text-[10px] text-slate-400">UPH χθες</div>
+            </div>
+            <div className="bg-slate-50 rounded-lg p-2 text-center">
+              <div className="text-xl font-bold font-mono text-slate-400">{teamAvgYesterday}</div>
+              <div className="text-[10px] text-slate-400">Μέσος ομάδας</div>
+            </div>
+            <div className={cn('rounded-lg p-2 text-center', diffYest >= 0 ? 'bg-green-50' : 'bg-red-50')}>
+              <div className={cn('text-xl font-bold font-mono', diffYest >= 0 ? 'text-green-600' : 'text-red-500')}>
+                {diffYest > 0 ? '+' : ''}{diffYest}%
+              </div>
+              <div className="text-[10px] text-slate-400">vs Ομάδα</div>
+            </div>
+          </div>
         </div>
-        <div className="font-mono text-xs text-slate-600">
-          <span className="text-slate-400 mr-1">Shift</span>{shiftStr}
+
+        {/* Quarterly comparison */}
+        <div>
+          <div className="text-[10px] font-mono uppercase tracking-widest text-slate-400 mb-2">Τρίμηνο (12 εβδ.)</div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="bg-slate-50 rounded-lg p-2 text-center">
+              <div className="text-xl font-bold font-mono text-slate-800">{q3Avg}</div>
+              <div className="text-[10px] text-slate-400">UPH μέσος</div>
+            </div>
+            <div className="bg-slate-50 rounded-lg p-2 text-center">
+              <div className="text-xl font-bold font-mono text-slate-400">{teamQ3Avg}</div>
+              <div className="text-[10px] text-slate-400">Μέσος ομάδας</div>
+            </div>
+            <div className={cn('rounded-lg p-2 text-center', diffQ3 >= 0 ? 'bg-green-50' : 'bg-red-50')}>
+              <div className={cn('text-xl font-bold font-mono', diffQ3 >= 0 ? 'text-green-600' : 'text-red-500')}>
+                {diffQ3 > 0 ? '+' : ''}{diffQ3}%
+              </div>
+              <div className="text-[10px] text-slate-400">vs Ομάδα</div>
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          <div className={cn('w-2 h-2 rounded-full', cfg?.dot ?? 'bg-slate-300')} />
-          <span className="text-xs font-medium text-slate-700">{cfg?.label ?? emp.current_status}</span>
+
+        {/* Horizontal bar comparison */}
+        <div>
+          <div className="text-[10px] font-mono uppercase tracking-widest text-slate-400 mb-2">Σύγκριση χθες</div>
+          <div className="space-y-2">
+            {bars.map(({ label, value, color }) => (
+              <div key={label}>
+                <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+                  <span>{label}</span>
+                  <span className="font-mono font-semibold text-slate-700">{value}</span>
+                </div>
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{
+                      width: `${Math.min(100, (value / (maxUPH * 1.1)) * 100)}%`,
+                      backgroundColor: color,
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="text-xs text-slate-500">
-          <span className="text-slate-400 mr-1">Hire Date</span>
-          <span className="font-medium">{getHireDate(emp)}</span>
+
+        {/* Live WMS Productivity */}
+        {hasProd && (
+          <div>
+            <div className="flex items-center gap-1.5 mb-2">
+              <Zap className="w-3 h-3 text-amber-500" />
+              <div className="text-[10px] font-mono uppercase tracking-widest text-slate-400">Παραγωγικότητα WMS (Orders/h)</div>
+            </div>
+
+            {/* Today live */}
+            <div className="mb-2">
+              <div className="text-[9px] text-slate-400 uppercase tracking-wider mb-1">Σήμερα live</div>
+              {todayRow ? (
+                <div className="grid grid-cols-3 gap-1.5">
+                  <div className="bg-amber-50 border border-amber-100 rounded-lg p-2 text-center">
+                    <div className="text-xl font-bold font-mono text-amber-600">{liveUPH}</div>
+                    <div className="text-[9px] text-slate-400">Orders/h</div>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg p-2 text-center">
+                    <div className="text-lg font-bold font-mono text-slate-500">{todayRow.ORDERS}</div>
+                    <div className="text-[9px] text-slate-400">Παραγγελίες</div>
+                  </div>
+                  <div className={cn('rounded-lg p-2 text-center', diffVsTeamToday == null ? 'bg-slate-50' : diffVsTeamToday >= 0 ? 'bg-green-50' : 'bg-red-50')}>
+                    {diffVsTeamToday != null ? (
+                      <>
+                        <div className={cn('text-xl font-bold font-mono', diffVsTeamToday >= 0 ? 'text-green-600' : 'text-red-500')}>
+                          {diffVsTeamToday > 0 ? '+' : ''}{diffVsTeamToday}%
+                        </div>
+                        <div className="text-[9px] text-slate-400">vs Ομάδα ({teamToday})</div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="text-lg font-bold font-mono text-slate-400">—</div>
+                        <div className="text-[9px] text-slate-400">vs Ομάδα</div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-xs text-slate-400 italic py-2 text-center bg-slate-50 rounded-lg">
+                  Δεν εργάστηκε σήμερα ακόμα
+                </div>
+              )}
+            </div>
+
+            {/* Month avg */}
+            <div>
+              <div className="text-[9px] text-slate-400 uppercase tracking-wider mb-1">Μέσος Όρος 30 ημερών</div>
+              {monthRow ? (
+                <div className="grid grid-cols-3 gap-1.5">
+                  <div className="bg-blue-50 border border-blue-100 rounded-lg p-2 text-center">
+                    <div className="text-xl font-bold font-mono text-blue-600">{monthUPH}</div>
+                    <div className="text-[9px] text-slate-400">Orders/h</div>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg p-2 text-center">
+                    <div className="text-lg font-bold font-mono text-slate-500">{monthRow.ORDERS_AVG}</div>
+                    <div className="text-[9px] text-slate-400">Παρ./ημέρα</div>
+                  </div>
+                  <div className={cn('rounded-lg p-2 text-center', diffVsTeamMonth == null ? 'bg-slate-50' : diffVsTeamMonth >= 0 ? 'bg-green-50' : 'bg-red-50')}>
+                    {diffVsTeamMonth != null ? (
+                      <>
+                        <div className={cn('text-xl font-bold font-mono', diffVsTeamMonth >= 0 ? 'text-green-600' : 'text-red-500')}>
+                          {diffVsTeamMonth > 0 ? '+' : ''}{diffVsTeamMonth}%
+                        </div>
+                        <div className="text-[9px] text-slate-400">vs Ομάδα ({teamMonth})</div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="text-lg font-bold font-mono text-slate-400">—</div>
+                        <div className="text-[9px] text-slate-400">vs Ομάδα</div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-xs text-slate-400 italic py-2 text-center bg-slate-50 rounded-lg">
+                  Δεν υπάρχουν δεδομένα μήνα
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 12-week line chart */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[10px] font-mono uppercase tracking-widest text-slate-400">Τάση 12 εβδομάδων</div>
+            <div className="flex items-center gap-1 text-xs text-slate-400">
+              {trend > 2
+                ? <><TrendingUp className="w-3 h-3 text-green-500" /><span className="text-green-500">+{Math.round(trend)}</span></>
+                : trend < -2
+                ? <><TrendingDown className="w-3 h-3 text-red-400" /><span className="text-red-400">{Math.round(trend)}</span></>
+                : <><Minus className="w-3 h-3" /><span>Σταθερό</span></>
+              }
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={100}>
+            <LineChart data={history} margin={{ top: 5, right: 5, bottom: 0, left: -25 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis dataKey="week" tick={{ fontSize: 9, fill: '#cbd5e1' }} axisLine={false} tickLine={false} interval={2} />
+              <YAxis tick={{ fontSize: 9, fill: '#cbd5e1' }} axisLine={false} tickLine={false} />
+              <ReferenceLine y={benchmark} stroke="#e2e8f0" strokeDasharray="4 4" strokeWidth={1.5} />
+              <Line type="monotone" dataKey="uph" stroke="#3b82f6" strokeWidth={2} dot={false} />
+              <Tooltip
+                formatter={(v: number) => [`${v} UPH`, 'Παραγωγή']}
+                labelFormatter={(l: string) => history.find(h => h.week === l)?.label ?? l}
+                contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e2e8f0', padding: '4px 8px' }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
         </div>
-        <div className="ml-auto flex gap-2 flex-shrink-0">
-          <button onClick={onEdit} className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5">
-            <Edit2 className="w-3 h-3" /> Edit
-          </button>
-          {emp.current_status === 'working' && (
+
+        {/* Weekly schedule */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[10px] font-mono uppercase tracking-widest text-slate-400">Πρόγραμμα Εβδομάδας</div>
+            <div className="text-[9px] text-slate-400">15–21 Ιουν</div>
+          </div>
+          {empShifts ? (
             <>
-              <button onClick={onBreak} className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5">
-                <Coffee className="w-3 h-3" /> Break
-              </button>
-              <button onClick={onSick} className="text-xs py-1.5 px-3 bg-red-50 border border-red-200 text-red-500 rounded-lg flex items-center gap-1.5 hover:bg-red-100 font-medium transition-colors">
-                <UserX className="w-3 h-3" /> Sick
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex border-b border-slate-200 mb-4">
-        {TABS.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            className={cn('px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
-              tab === t.key ? 'border-blue-500 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'
-            )}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Overview ── */}
-      {tab === 'overview' && (
-        <div className="grid grid-cols-4 gap-4">
-          {/* Performance chart */}
-          <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-xs font-semibold text-slate-600">Performance (30 days)</div>
-              <div className="flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded-full">
-                <span className="text-amber-500 text-xs">🏆</span>
-                <span className="text-xs font-bold font-mono text-amber-700">{score}/100</span>
+              <div className="grid grid-cols-7 gap-1">
+                {SCHEDULE_DAYS.map((day, i) => {
+                  const shift = empShifts[i]
+                  const shiftStr = shift
+                    ? `${shift.start_time.slice(0, 5)}-${shift.end_time.slice(0, 5)}`
+                    : (emp.current_status === 'sick' ? 'sick' : null)
+                  const s = classifyShift(shiftStr)
+                  return (
+                    <div key={day} className="text-center" title={s.full ?? 'Ρεπό'}>
+                      <div className="text-[9px] text-slate-400 mb-1">{day}</div>
+                      <div className={cn('h-9 rounded text-[10px] font-bold flex items-center justify-center', s.bg, s.text)}>
+                        {s.label}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-            </div>
-            <ResponsiveContainer width="100%" height={110}>
-              <LineChart data={history} margin={{ top: 4, right: 4, bottom: 0, left: -22 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="day" tick={{ fontSize: 8, fill: '#cbd5e1' }} axisLine={false} tickLine={false} interval={9} />
-                <YAxis tick={{ fontSize: 8, fill: '#cbd5e1' }} axisLine={false} tickLine={false} domain={[0, 200]} tickFormatter={(v: number) => `${v}%`} />
-                <ReferenceLine y={100} stroke="#e2e8f0" strokeDasharray="4 4" />
-                <Line type="monotone" dataKey="pct" stroke="#3b82f6" strokeWidth={2} dot={false} />
-                <Tooltip formatter={(v: number) => [`${v}%`, 'Productivity']} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
-              </LineChart>
-            </ResponsiveContainer>
-            <div className="mt-3">
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-2xl font-bold font-mono text-slate-800">{prodPct}%</span>
-                <span className="text-[10px] text-slate-400">{uph}/h</span>
-              </div>
-              <div className="flex items-center gap-1 mt-0.5">
-                <TrendingUp className="w-3 h-3 text-green-500" />
-                <span className="text-[10px] text-green-500">+{Math.round(seededVal(empSeed(emp),5)*10)}% vs prev 30 days</span>
-              </div>
-            </div>
-          </div>
-
-          {/* 4 Metrics */}
-          <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <div className="text-xs font-semibold text-slate-600 mb-4">Employee Metrics</div>
-            <div className="space-y-4">
-              <div>
-                <div className="text-[10px] text-slate-400 mb-1">Productivity</div>
-                <div className="text-xl font-bold font-mono text-slate-800">
-                  {uph}<span className="text-xs font-normal text-slate-400">/h</span>
-                </div>
-                <div className="h-1.5 bg-slate-100 rounded-full mt-1.5 overflow-hidden">
-                  <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min(100, prodPct)}%` }} />
-                </div>
-              </div>
-              <MetricRow label="Reliability" level={rel} sublabel={RELIABILITY_LABELS[rel]} />
-              <MetricRow label="Autonomy"    level={aut} sublabel={AUTONOMY_LABELS[aut]} />
-              <MetricRow label="Flexibility" level={flex} sublabel={`${roleSkills.length} ${roleSkills.length === 1 ? 'ρόλος' : 'ρόλοι'}`} />
-            </div>
-          </div>
-
-          {/* SLA Contribution */}
-          <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <div className="text-xs font-semibold text-slate-600 mb-2">SLA Contribution (30 days)</div>
-            <div className="flex items-center gap-2">
-              <PieChart width={96} height={96}>
-                <Pie data={sla} cx={44} cy={44} innerRadius={26} outerRadius={44} dataKey="value" paddingAngle={2}>
-                  {sla.map((s, i) => <Cell key={i} fill={s.color} />)}
-                </Pie>
-              </PieChart>
-              <div className="space-y-1.5 flex-1">
-                {sla.map(s => (
-                  <div key={s.name} className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: s.color }} />
-                    <span className="text-[10px] text-slate-500 flex-1">{s.name}</span>
-                    <span className="text-[10px] font-bold font-mono text-slate-700">{s.value.toFixed(1)}%</span>
+              <div className="flex gap-2 flex-wrap mt-2">
+                {[
+                  { bg: 'bg-blue-200',   label: '06–07' },
+                  { bg: 'bg-sky-200',    label: '09–11' },
+                  { bg: 'bg-amber-200',  label: '13' },
+                  { bg: 'bg-purple-200', label: '18 Βράδυ' },
+                  { bg: 'bg-red-200',    label: 'Άρρωστος' },
+                  { bg: 'bg-slate-100',  label: 'Ρεπό' },
+                ].map(({ bg, label }) => (
+                  <div key={label} className="flex items-center gap-1">
+                    <div className={cn('w-2 h-2 rounded', bg)} />
+                    <span className="text-[9px] text-slate-400">{label}</span>
                   </div>
                 ))}
               </div>
-            </div>
-          </div>
-
-          {/* Summary */}
-          <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <div className="text-xs font-semibold text-slate-600 mb-3">Summary</div>
-            <div className="space-y-2.5">
-              {([
-                ['Total Shifts',  summary.totalShifts],
-                ['Hours Worked',  `${summary.hoursWorked}h`],
-                ['Break Time',    summary.breakTime],
-                ['Overtime',      summary.overtime],
-                ['Absences',      summary.absences],
-              ] as [string, string | number][]).map(([label, val]) => (
-                <div key={label} className="flex items-center justify-between">
-                  <span className="text-xs text-slate-400">{label}</span>
-                  <span className="text-xs font-bold font-mono text-slate-800">{val}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+            </>
+          ) : (
+            <div className="text-xs text-slate-400 italic py-3 text-center">Δεν έχει γίνει import πρόγραμμα αυτή την εβδομάδα</div>
+          )}
         </div>
-      )}
 
-      {/* ── Skills ── */}
-      {tab === 'skills' && (
-        <div className="flex gap-5">
-          {/* Role-based skill table */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5 flex-1 max-w-lg">
-            <div className="text-xs font-semibold text-slate-600 mb-4">Skill Rating ανά Ρόλο</div>
-            <div className="space-y-4">
-              {roleSkills.map(({ role, level }) => (
-                <div key={role} className="grid grid-cols-[120px_1fr_80px] items-center gap-3">
-                  <RoleBadge role={role} />
-                  <div className="flex items-center gap-2">
-                    <StarRating level={level} />
-                    <span className="text-xs font-semibold text-slate-700">{SKILL_LABELS[String(level)]}</span>
-                  </div>
-                  <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-amber-400 rounded-full" style={{ width: `${level*20}%` }} />
-                  </div>
-                </div>
-              ))}
+        {/* Actions */}
+        <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
+          <button onClick={onEdit} className="btn-primary text-xs py-2 w-full flex items-center justify-center gap-2">
+            <Edit2 className="w-3.5 h-3.5" /> Επεξεργασία Στοιχείων
+          </button>
+          {emp.current_status === 'working' && (
+            <div className="flex gap-2">
+              <button
+                onClick={onBreak}
+                className="btn-secondary text-xs py-1.5 flex-1 flex items-center justify-center gap-1"
+              >
+                <Coffee className="w-3.5 h-3.5" /> Διάλειμμα
+              </button>
+              <button
+                onClick={onSick}
+                className="flex-1 bg-red-50 border border-red-200 text-red-500 text-xs font-medium py-1.5 rounded-lg flex items-center justify-center gap-1 hover:bg-red-100 transition-colors"
+              >
+                <UserX className="w-3.5 h-3.5" /> Άρρωστος
+              </button>
             </div>
-          </div>
-
-          {/* Workforce Score card */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5 w-72 flex-shrink-0">
-            <div className="text-xs font-semibold text-slate-600 mb-4">Workforce Metrics</div>
-            <div className="space-y-3 mb-5">
-              <MetricRow label="Reliability" level={rel} sublabel={RELIABILITY_LABELS[rel]} />
-              <MetricRow label="Autonomy"    level={aut} sublabel={AUTONOMY_LABELS[aut]} />
-              <MetricRow label="Flexibility" level={flex} sublabel={`${roleSkills.length} roles`} />
-            </div>
-            <div className="pt-4 border-t border-slate-100">
-              <div className="text-[10px] text-slate-400 mb-1.5">Workforce Score</div>
-              <div className="flex items-baseline gap-1.5 mb-2">
-                <span className="text-amber-500 text-xl">🏆</span>
-                <span className="text-4xl font-bold font-mono text-slate-800">{score}</span>
-                <span className="text-slate-400">/100</span>
-              </div>
-              <div className="h-2 bg-slate-100 rounded-full overflow-hidden mb-2">
-                <div
-                  className={cn('h-full rounded-full transition-all', score >= 80 ? 'bg-green-500' : score >= 60 ? 'bg-amber-400' : 'bg-red-400')}
-                  style={{ width: `${score}%` }}
-                />
-              </div>
-              <div className="text-[10px] text-slate-400">Prod 40% · Reliability 25% · Autonomy 20% · Flexibility 15%</div>
-            </div>
-          </div>
+          )}
         </div>
-      )}
-
-      {(tab === 'performance' || tab === 'attendance' || tab === 'activity') && (
-        <div className="bg-white rounded-xl border border-slate-200 p-10 text-center text-slate-400 text-sm">
-          Coming soon
-        </div>
-      )}
+      </div>
     </div>
   )
 }
@@ -505,22 +468,28 @@ function DetailPanel({ emp, weekShifts, todayIdx, onEdit, onBreak, onSick }: {
 // ── TeamPage ──────────────────────────────────────────────────────────────────
 
 export function TeamPage() {
-  const employees    = useAppStore(s => s.employees)
+  const employees = useAppStore(s => s.employees)
   const [tab,        setTab]        = useState<'all' | EmployeeStatus>('all')
   const [search,     setSearch]     = useState('')
   const [roleFilter, setRoleFilter] = useState<EmployeeRole | 'all'>('all')
   const [showModal,  setShowModal]  = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [editEmp,    setEditEmp]    = useState<Employee | null>(null)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [page,       setPage]       = useState(1)
+  const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null)
 
   const { data: weekShifts } = useWeekShifts()
+  const [prodSnap, setProdSnap] = useState<ProdSnapshot | null>(null)
+
+  useEffect(() => {
+    supabase.from('productivity_snapshots')
+      .select('*').order('created_at', { ascending: false }).limit(1).single()
+      .then(({ data }) => { if (data) setProdSnap(data as ProdSnapshot) })
+  }, [])
+
   const updateStatus = useUpdateEmployeeStatus()
   const requestBreak = useRequestBreak()
-  const todayIdx     = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1
 
-  const filtered = useMemo(() => employees.filter(e => {
+  const filtered = employees.filter(e => {
     if (tab !== 'all' && e.current_status !== tab) return false
     if (roleFilter !== 'all' && e.primary_role !== roleFilter) return false
     if (search) {
@@ -528,29 +497,39 @@ export function TeamPage() {
       return e.full_name.toLowerCase().includes(q) || e.employee_code.toLowerCase().includes(q)
     }
     return true
-  }), [employees, tab, roleFilter, search])
+  })
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
-  const pageCards  = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
-  const selectedEmp = pageCards.find(e => e.id === selectedId) ?? null
+  // Compute team averages per role (yesterday + quarterly)
+  const { roleAvgYesterday, roleQ3Avg } = useMemo(() => {
+    const byRole: Record<string, { y: number[]; q: number[] }> = {}
+    employees.forEach(emp => {
+      const role = emp.primary_role
+      if (!byRole[role]) byRole[role] = { y: [], q: [] }
+      byRole[role].y.push(getYesterdayUPH(emp))
+      const hist = getProductivityHistory(emp)
+      byRole[role].q.push(Math.round(hist.reduce((a, b) => a + b.uph, 0) / hist.length))
+    })
+    const roleAvgYesterday: Record<string, number> = {}
+    const roleQ3Avg: Record<string, number> = {}
+    Object.entries(byRole).forEach(([role, { y, q }]) => {
+      roleAvgYesterday[role] = Math.round(y.reduce((a, b) => a + b, 0) / y.length)
+      roleQ3Avg[role]        = Math.round(q.reduce((a, b) => a + b, 0) / q.length)
+    })
+    return { roleAvgYesterday, roleQ3Avg }
+  }, [employees])
 
-  const rows: Employee[][] = []
-  for (let i = 0; i < pageCards.length; i += COLS) {
-    rows.push(pageCards.slice(i, i + COLS))
-  }
-
-  function toggleSelect(id: string) {
-    setSelectedId(prev => prev === id ? null : id)
-  }
-
-  async function handleBreak(emp: Employee) {
+  async function handleBreak(emp: Employee, e?: React.MouseEvent) {
+    e?.stopPropagation()
     try {
       await requestBreak.mutateAsync({ employee_id: emp.id })
       toast.success(`Διάλειμμα για ${emp.full_name}`)
-    } catch { toast.error('Αποτυχία') }
+    } catch {
+      toast.error('Αποτυχία αιτήματος διαλείμματος')
+    }
   }
 
-  async function handleSick(emp: Employee) {
+  async function handleSick(emp: Employee, e?: React.MouseEvent) {
+    e?.stopPropagation()
     if (!confirm(`Σημείωση ${emp.full_name} ως άρρωστος;`)) return
     await updateStatus.mutateAsync({ id: emp.id, status: 'sick' })
     toast.success(`${emp.full_name} σημειώθηκε ως άρρωστος`)
@@ -564,10 +543,16 @@ export function TeamPage() {
         subtitle={`${employees.length} εργαζόμενοι · ${employees.filter(e => e.current_status === 'working').length} εργάζονται`}
         actions={
           <div className="flex gap-2">
-            <button onClick={() => setShowImport(true)} className="btn-secondary flex items-center gap-2">
+            <button
+              onClick={() => setShowImport(true)}
+              className="btn-secondary flex items-center gap-2"
+            >
               <Upload className="w-4 h-4" /> Import Πρόγραμμα
             </button>
-            <button onClick={() => { setEditEmp(null); setShowModal(true) }} className="btn-primary flex items-center gap-2">
+            <button
+              onClick={() => { setEditEmp(null); setShowModal(true) }}
+              className="btn-primary flex items-center gap-2"
+            >
               <Plus className="w-4 h-4" /> Προσθήκη
             </button>
           </div>
@@ -575,13 +560,19 @@ export function TeamPage() {
       />
 
       <div className="p-6">
-        {/* Status summary */}
-        <div className="grid grid-cols-6 gap-3 mb-5">
+        {/* Status summary cards */}
+        <div className="grid grid-cols-6 gap-3 mb-6">
           {Object.entries(STATUS_STYLES).map(([status, style]) => {
             const count = employees.filter(e => e.current_status === status).length
             return (
-              <button key={status} onClick={() => { setTab(status as EmployeeStatus); setPage(1) }}
-                className={cn('rounded-xl border p-3 text-center transition-all hover:brightness-95', style.bg, tab === status ? 'ring-2 ring-offset-1 ring-slate-400' : '')}
+              <button
+                key={status}
+                onClick={() => setTab(status as EmployeeStatus)}
+                className={cn(
+                  'rounded-xl border p-3 text-center transition-all hover:brightness-95',
+                  style.bg,
+                  tab === status ? 'ring-2 ring-offset-1 ring-slate-400' : ''
+                )}
               >
                 <div className={cn('text-2xl font-bold font-mono', style.text)}>{count}</div>
                 <div className="text-xs text-slate-500 mt-0.5">{style.label}</div>
@@ -591,87 +582,201 @@ export function TeamPage() {
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-3 mb-5 flex-wrap">
+        <div className="flex items-center gap-3 mb-4 flex-wrap">
           <div className="flex gap-1 bg-slate-100 border border-slate-200 rounded-lg p-1">
             {STATUS_TABS.map(({ key, label }) => (
-              <button key={key} onClick={() => { setTab(key); setPage(1) }}
-                className={cn('px-3 py-1 rounded text-xs font-semibold transition-all',
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                className={cn(
+                  'px-3 py-1 rounded text-xs font-semibold transition-all',
                   tab === key ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                )}>
+                )}
+              >
                 {label}
               </button>
             ))}
           </div>
-          <select value={roleFilter} onChange={e => { setRoleFilter(e.target.value as EmployeeRole | 'all'); setPage(1) }} className="input w-36 text-xs">
+
+          <select
+            value={roleFilter}
+            onChange={e => setRoleFilter(e.target.value as EmployeeRole | 'all')}
+            className="input w-36 text-xs"
+          >
             <option value="all">Όλοι οι Ρόλοι</option>
             {Object.entries(ROLE_CONFIG).map(([role, cfg]) => (
               <option key={role} value={role}>{cfg.label}</option>
             ))}
           </select>
+
           <div className="relative max-w-xs flex-1">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} placeholder="Αναζήτηση…" className="input pl-8 text-xs" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Αναζήτηση ονόματος ή κωδικού…"
+              className="input pl-8 text-xs"
+            />
           </div>
+
           <div className="ml-auto text-xs text-slate-400">{filtered.length} εμφανίζονται</div>
         </div>
 
-        {/* Card grid */}
-        <div>
-          {rows.map((rowEmps, rowIdx) => {
-            const rowHasSelected = rowEmps.some(e => e.id === selectedId)
-            return (
-              <Fragment key={rowIdx}>
-                <div className="grid grid-cols-4 gap-4 mb-4">
-                  {rowEmps.map(emp => (
-                    <EmployeeCard
-                      key={emp.id}
-                      emp={emp}
-                      isSelected={emp.id === selectedId}
-                      weekShifts={weekShifts}
-                      todayIdx={todayIdx}
-                      onClick={() => toggleSelect(emp.id)}
-                    />
+        {/* Table + detail panel */}
+        <div className="flex gap-4 items-start">
+          {/* Table */}
+          <div className={cn('bg-white rounded-xl border border-slate-200 overflow-hidden min-w-0', selectedEmp ? 'flex-1' : 'w-full')}>
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  {['Εργαζόμενος', 'Κωδικός', 'Ρόλος', 'Status', 'UPH χθες', 'vs Ομάδα', 'Τάση 3μ', 'Ενέργειες'].map(h => (
+                    <th key={h} className="text-left text-[10px] tracking-widest text-slate-400 uppercase px-4 py-3 font-normal whitespace-nowrap">
+                      {h}
+                    </th>
                   ))}
-                  {rowEmps.length < COLS && rowIdx === rows.length - 1 &&
-                    Array.from({ length: COLS - rowEmps.length }, (_, i) => <div key={`ph-${i}`} />)}
-                </div>
-                {rowHasSelected && selectedEmp && (
-                  <DetailPanel
-                    emp={selectedEmp}
-                    weekShifts={weekShifts}
-                    todayIdx={todayIdx}
-                    onEdit={() => { setEditEmp(selectedEmp); setShowModal(true) }}
-                    onBreak={() => handleBreak(selectedEmp)}
-                    onSick={() => handleSick(selectedEmp)}
-                  />
-                )}
-              </Fragment>
-            )
-          })}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filtered.map(emp => {
+                  const cfg = STATUS_CONFIG[emp.current_status]
+                  const yUPH = getYesterdayUPH(emp)
+                  const teamAvg = roleAvgYesterday[emp.primary_role] ?? 100
+                  const diffPct = Math.round(((yUPH - teamAvg) / teamAvg) * 100)
+                  const hist = getProductivityHistory(emp)
+                  const trend = hist[11].uph - hist[8].uph
+                  const isAlert = yUPH < getEmpBaseline(emp) * 0.85
+                  const isSelected = selectedEmp?.id === emp.id
 
-          {rows.length === 0 && (
-            <div className="text-center text-slate-400 text-sm py-20">Δεν βρέθηκαν εργαζόμενοι</div>
+                  return (
+                    <tr
+                      key={emp.id}
+                      onClick={() => setSelectedEmp(isSelected ? null : emp)}
+                      className={cn(
+                        'hover:bg-slate-50 transition-colors cursor-pointer',
+                        isSelected && 'bg-blue-50/70'
+                      )}
+                    >
+                      {/* Employee */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 relative"
+                            style={{
+                              background: `${ROLE_CONFIG[emp.primary_role]?.color ?? '#6b7280'}18`,
+                              color: ROLE_CONFIG[emp.primary_role]?.color ?? '#6b7280',
+                            }}
+                          >
+                            {initials(emp.full_name)}
+                            {isAlert && (
+                              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full border border-white" />
+                            )}
+                          </div>
+                          <span className="font-semibold text-slate-800 truncate">{emp.full_name}</span>
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3 font-mono text-xs text-slate-400">{emp.employee_code}</td>
+
+                      <td className="px-4 py-3"><RoleBadge role={emp.primary_role} /></td>
+
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5">
+                          <div className={cn('w-2 h-2 rounded-full', cfg?.dot ?? 'bg-slate-300')} />
+                          <span className="text-xs font-medium text-slate-600">{cfg?.label ?? emp.current_status}</span>
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-700">
+                        {yUPH} <span className="font-normal text-slate-400 text-[10px]">UPH</span>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <span className={cn(
+                          'text-xs font-semibold',
+                          diffPct > 5 ? 'text-green-600' : diffPct < -5 ? 'text-red-500' : 'text-slate-400'
+                        )}>
+                          {diffPct > 0 ? '+' : ''}{diffPct}%
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        {trend > 3
+                          ? <TrendingUp className="w-4 h-4 text-green-500" />
+                          : trend < -3
+                          ? <TrendingDown className="w-4 h-4 text-red-400" />
+                          : <Minus className="w-4 h-4 text-slate-300" />
+                        }
+                      </td>
+
+                      {/* Actions — stopPropagation so row click doesn't fire */}
+                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => { setEditEmp(emp); setShowModal(true) }}
+                            className="p-1.5 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                            title="Επεξεργασία"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          {emp.current_status === 'working' && (
+                            <>
+                              <button
+                                onClick={e => handleBreak(emp, e)}
+                                className="p-1.5 rounded text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                title="Διάλειμμα"
+                              >
+                                <Coffee className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={e => handleSick(emp, e)}
+                                className="p-1.5 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                                title="Άρρωστος"
+                              >
+                                <UserX className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-12 text-center text-slate-400 text-sm">
+                      Δεν βρέθηκαν εργαζόμενοι
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Detail panel */}
+          {selectedEmp && (
+            <EmployeeDetailPanel
+              emp={selectedEmp}
+              teamAvgYesterday={roleAvgYesterday[selectedEmp.primary_role] ?? 100}
+              teamQ3Avg={roleQ3Avg[selectedEmp.primary_role] ?? 100}
+              weekShifts={weekShifts}
+              prodSnap={prodSnap}
+              onEdit={() => { setEditEmp(selectedEmp); setShowModal(true) }}
+              onClose={() => setSelectedEmp(null)}
+              onBreak={async () => { await handleBreak(selectedEmp) }}
+              onSick={async () => { await handleSick(selectedEmp) }}
+            />
           )}
         </div>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between mt-2 text-xs text-slate-500">
-            <div>{(page-1)*PER_PAGE+1}–{Math.min(page*PER_PAGE, filtered.length)} of {filtered.length}</div>
-            <div className="flex items-center gap-1">
-              <button onClick={() => setPage(p => Math.max(1,p-1))} disabled={page===1} className="px-2 py-1 rounded hover:bg-slate-200 disabled:opacity-30">‹</button>
-              {Array.from({ length: Math.min(totalPages,7) }, (_,i) => i+1).map(p => (
-                <button key={p} onClick={() => setPage(p)} className={cn('w-7 h-7 rounded font-medium', page===p ? 'bg-blue-500 text-white' : 'hover:bg-slate-200 text-slate-600')}>{p}</button>
-              ))}
-              <button onClick={() => setPage(p => Math.min(totalPages,p+1))} disabled={page===totalPages} className="px-2 py-1 rounded hover:bg-slate-200 disabled:opacity-30">›</button>
-            </div>
-          </div>
-        )}
       </div>
 
       {showModal && (
-        <EmployeeModal employee={editEmp} onClose={() => { setShowModal(false); setEditEmp(null) }} />
+        <EmployeeModal
+          employee={editEmp}
+          onClose={() => { setShowModal(false); setEditEmp(null) }}
+        />
       )}
+
       {showImport && (
         <ScheduleImportModal onClose={() => setShowImport(false)} />
       )}
