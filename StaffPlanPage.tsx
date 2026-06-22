@@ -230,8 +230,8 @@ export function StaffPlanPage() {
                 <th className="text-left px-5 py-3 text-xs text-slate-400 font-medium uppercase tracking-wider">Ημ/νία</th>
                 <th className="text-left px-4 py-3 text-xs text-slate-400 font-medium">Ημέρα</th>
                 <th className="text-right px-4 py-3 text-xs text-slate-400 font-medium">Παραγγελίες</th>
-                <th className="text-center px-4 py-3 text-xs font-medium" style={{ color: '#2563eb', background: '#eff6ff' }}>Β1 (07–15)</th>
-                <th className="text-center px-4 py-3 text-xs font-medium" style={{ color: '#0d9488', background: '#f0fdfa' }}>Β2 (13–21)</th>
+                <th className="text-center px-4 py-3 text-xs font-medium" style={{ color: '#2563eb', background: '#eff6ff' }}>Β1</th>
+                <th className="text-center px-4 py-3 text-xs font-medium" style={{ color: '#0d9488', background: '#f0fdfa' }}>Β2</th>
                 <th className="text-center px-4 py-3 text-xs font-medium" style={{ color: '#7c3aed', background: '#faf5ff' }}>Night</th>
                 <th className="text-center px-5 py-3 text-xs text-slate-500 font-semibold uppercase tracking-wider">Σύνολο</th>
               </tr>
@@ -287,7 +287,7 @@ export function StaffPlanPage() {
                             {/* Shift A */}
                             <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4">
                               <div className="text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-3">
-                                Βάρδια Α · 07:00–15:00
+                                Βάρδια Α · {isSat ? '09:00–17:00' : isSun ? '11:00–19:00' : '07:00–15:00'}
                               </div>
                               <div className="grid grid-cols-4 gap-2">
                                 {ROLE_COLS.map(r => {
