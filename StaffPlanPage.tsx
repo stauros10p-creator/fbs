@@ -67,11 +67,15 @@ function planTotal(p: DayPlan): number {
          p.pick.rolling + p.pick.night + p.pal.rolling + p.pal.night
 }
 
-function shiftTotal(p: DayPlan, shift: 'A' | 'B' | 'night'): number {
+function shiftTotal(p: DayPlan, shift: 'A' | 'B' | 'night', singleShift = false): number {
   if (shift === 'night') {
     return p.op.night + p.pack.night + p.pick.night + p.pal.night
   }
-  // A and B each get rolling/2
+  if (singleShift) {
+    // Sat & Sun: rolling = the one shift, no division
+    return p.op.rolling + p.pack.rolling + p.pick.rolling + p.pal.rolling
+  }
+  // Mon-Fri: rolling split equally across 2 shifts
   return Math.ceil(p.op.rolling / 2) + Math.ceil(p.pack.rolling / 2) +
          Math.ceil(p.pick.rolling / 2) + Math.ceil(p.pal.rolling / 2)
 }
@@ -172,7 +176,8 @@ export function StaffPlanPage() {
               {DAY_KEYS.map((dk, i) => {
                 const p = monthPlan[dk]
                 const total = planTotal(p)
-                const perShift = shiftTotal(p, 'A')
+                const isSingleShift = dk === 'sat' || dk === 'sun'
+                const perShift = shiftTotal(p, 'A', isSingleShift)
                 const nightTotal = shiftTotal(p, 'night')
                 return (
                   <tr key={dk} className={`border-b border-slate-50 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}>
@@ -194,13 +199,13 @@ export function StaffPlanPage() {
                       <span className="font-mono font-semibold text-blue-600">{perShift}</span>
                     </td>
                     <td className="px-3 py-3 text-center" style={{ background: '#f7fdfb' }}>
-                      <span className="font-mono font-semibold" style={{ color: dk === 'sat' ? '#d1d5db' : '#0d9488' }}>{dk === 'sat' ? '—' : perShift}</span>
+                      <span className="font-mono font-semibold" style={{ color: isSingleShift ? '#d1d5db' : '#0d9488' }}>{isSingleShift ? '—' : perShift}</span>
                     </td>
                     <td className="px-3 py-3 text-center" style={{ background: '#fdf9ff' }}>
                       <span className="font-mono font-semibold" style={{ color: nightTotal > 0 ? '#7c3aed' : '#d1d5db' }}>{nightTotal > 0 ? nightTotal : '—'}</span>
                     </td>
                     <td className="px-5 py-3 text-center">
-                      <span className="font-mono font-bold text-slate-800 text-base">{dk === 'sat' ? perShift : total}</span>
+                      <span className="font-mono font-bold text-slate-800 text-base">{isSingleShift ? perShift : total}</span>
                       {nightTotal > 0 && (
                         <div className="text-[10px] text-slate-400">{total - nightTotal} + {nightTotal}N</div>
                       )}
@@ -236,8 +241,8 @@ export function StaffPlanPage() {
                 const isSat = dow === 6
                 const isSun = dow === 0
                 const isWeekend = isSat || isSun
-                const sA = shiftTotal(plan, 'A')
-                const sB = isSat ? 0 : shiftTotal(plan, 'B') // Sat = single shift
+                const sA = shiftTotal(plan, 'A', isWeekend)
+                const sB = isWeekend ? 0 : shiftTotal(plan, 'B') // Sat/Sun = single shift
                 const sN = shiftTotal(plan, 'night')
                 const total = planTotal(plan)
                 const isExp = expandedDay === dateStr
@@ -262,14 +267,14 @@ export function StaffPlanPage() {
                       <td className="px-4 py-2.5 text-center font-mono font-semibold text-blue-600" style={{ background: '#f8fbff' }}>
                         {sA}
                       </td>
-                      <td className="px-4 py-2.5 text-center font-mono font-semibold" style={{ color: isSat ? '#d1d5db' : '#0d9488', background: '#f7fdfb' }}>
-                        {isSat ? '—' : sB}
+                      <td className="px-4 py-2.5 text-center font-mono font-semibold" style={{ color: isWeekend ? '#d1d5db' : '#0d9488', background: '#f7fdfb' }}>
+                        {isWeekend ? '—' : sB}
                       </td>
                       <td className="px-4 py-2.5 text-center font-mono font-semibold" style={{ color: sN > 0 ? '#7c3aed' : '#d1d5db', background: '#fdf9ff' }}>
                         {sN > 0 ? sN : '—'}
                       </td>
                       <td className="px-5 py-2.5 text-center font-mono font-bold text-slate-800 text-base">
-                        {isSat ? sA : total}
+                        {isWeekend ? sA : total}
                       </td>
                     </tr>
 
@@ -287,10 +292,10 @@ export function StaffPlanPage() {
                               <div className="grid grid-cols-4 gap-2">
                                 {ROLE_COLS.map(r => {
                                   const rs = plan[r.key as keyof Pick<DayPlan,'op'|'pack'|'pick'|'pal'>] as RoleStaff
-                                  const half = Math.ceil(rs.rolling / 2)
+                                  const count = isWeekend ? rs.rolling : Math.ceil(rs.rolling / 2)
                                   return (
                                     <div key={r.key} className="text-center bg-white rounded-lg py-2">
-                                      <div className="text-lg font-bold font-mono" style={{ color: r.color }}>{half}</div>
+                                      <div className="text-lg font-bold font-mono" style={{ color: r.color }}>{count}</div>
                                       <div className="text-[9px] text-slate-400">{r.label}</div>
                                     </div>
                                   )
@@ -299,10 +304,10 @@ export function StaffPlanPage() {
                               <div className="text-xs text-blue-500 font-semibold mt-2 text-right">Σύνολο: {sA}</div>
                             </div>
 
-                            {/* Shift B — not on Saturday */}
-                            <div className={`rounded-xl border p-4 ${isSat ? 'border-slate-100 bg-slate-50 opacity-40' : 'border-teal-100 bg-teal-50/50'}`}>
+                            {/* Shift B — not on Saturday/Sunday */}
+                            <div className={`rounded-xl border p-4 ${isWeekend ? 'border-slate-100 bg-slate-50 opacity-40' : 'border-teal-100 bg-teal-50/50'}`}>
                               <div className="text-[10px] font-bold text-teal-600 uppercase tracking-wider mb-3">
-                                Βάρδια Β · 13:00–21:00 {isSat ? '(—)' : ''}
+                                Βάρδια Β · 13:00–21:00 {isWeekend ? '(—)' : ''}
                               </div>
                               <div className="grid grid-cols-4 gap-2">
                                 {ROLE_COLS.map(r => {
@@ -310,13 +315,13 @@ export function StaffPlanPage() {
                                   const half = Math.ceil(rs.rolling / 2)
                                   return (
                                     <div key={r.key} className="text-center bg-white rounded-lg py-2">
-                                      <div className="text-lg font-bold font-mono" style={{ color: isSat ? '#9ca3af' : r.color }}>{isSat ? '—' : half}</div>
+                                      <div className="text-lg font-bold font-mono" style={{ color: isWeekend ? '#9ca3af' : r.color }}>{isWeekend ? '—' : half}</div>
                                       <div className="text-[9px] text-slate-400">{r.label}</div>
                                     </div>
                                   )
                                 })}
                               </div>
-                              <div className="text-xs text-teal-500 font-semibold mt-2 text-right">{isSat ? '—' : `Σύνολο: ${sB}`}</div>
+                              <div className="text-xs text-teal-500 font-semibold mt-2 text-right">{isWeekend ? '—' : `Σύνολο: ${sB}`}</div>
                             </div>
 
                             {/* Night shift */}
@@ -352,7 +357,7 @@ export function StaffPlanPage() {
         </div>
 
         <div className="text-center text-xs text-slate-400">
-          Κλικ σε ημέρα για ανάλυση ανά ρόλο · Β1 και Β2 έχουν ίσο μέρος του Rolling (R/2 ανά βάρδια) · Σάββατο = μόνο Β1
+          Κλικ σε ημέρα για ανάλυση ανά ρόλο · Β1 και Β2 έχουν ίσο μέρος του Rolling (R/2 ανά βάρδια) · Σάββατο & Κυριακή = μόνο 1 βάρδια
         </div>
       </div>
     </div>
