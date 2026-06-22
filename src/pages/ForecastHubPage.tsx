@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { Users, BarChart2, ChevronRight } from 'lucide-react'
+import { Users, BarChart2, CalendarDays, ChevronRight } from 'lucide-react'
 import type { FC, SVGProps } from 'react'
 
 interface ReportCard {
@@ -16,6 +16,16 @@ interface ReportCard {
 }
 
 const REPORTS: ReportCard[] = [
+  {
+    to: '/staff-plan',
+    Icon: CalendarDays,
+    label: 'Πλάνο Στελέχωσης',
+    description: 'Μηνιαίο πλάνο προσωπικού ανά τύπο ημέρας και βάρδια (Ιούν–Σεπ)',
+    tags: ['Μηνιαίο', 'Βάρδιες', 'Ρόλοι'],
+    accentBg: 'bg-teal-500/10',
+    accentText: 'text-teal-600',
+    accentBorder: 'hover:border-teal-400/50',
+  },
   {
     to: '/forecast/staff',
     Icon: Users,
@@ -44,13 +54,13 @@ export function ForecastHubPage() {
   return (
     <div className="min-h-full">
       <PageHeader
-        accent="Forecast Module"
-        title="FORECAST"
-        subtitle="Επέλεξε report για να δεις αναλυτικά δεδομένα"
+        accent="Schedule Module"
+        title="SCHEDULE"
+        subtitle="Επέλεξε εργαλείο για πλάνο στελέχωσης και προβλέψεις"
       />
 
       <div className="p-8">
-        <div className="grid grid-cols-2 gap-5">
+        <div className="grid grid-cols-3 gap-5">
           {REPORTS.map((r, i) => (
             <button
               key={i}
