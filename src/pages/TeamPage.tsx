@@ -7,10 +7,6 @@ import { SCHEDULE_DAYS, classifyShift } from '@/lib/schedule'
 import { useWeekShifts } from '@/hooks'
 import { ScheduleImportModal } from '@/components/team/ScheduleImportModal'
 import type { Shift } from '@/types'
-import {
-  LineChart, Line, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, ReferenceLine, CartesianGrid,
-} from 'recharts'
 import { useAppStore } from '@/store'
 import { supabase } from '@/lib/supabase'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -26,7 +22,6 @@ import toast from 'react-hot-toast'
 interface ProdRow      { ONOMA: string; ORDERS: number; ORES: number; UPH: number }
 interface ProdMonthRow { ONOMA: string; UPH_AVG: number; ORDERS_AVG: number }
 interface ProdSnapshot {
-  generated_at:           string
   pickers_today:          ProdRow[]
   pickers_month:          ProdMonthRow[]
   packers_today:          ProdRow[]
@@ -38,13 +33,10 @@ interface ProdSnapshot {
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
-
 const ROLE_BENCHMARK: Record<string, number> = {
   operator: 190, picker: 77, packer: 80, sorter: 150, transporter: 120,
 }
-
 const MONTHS_SHORT = ['Ιαν', 'Φεβ', 'Μαρ', 'Απρ', 'Μαϊ', 'Ιουν', 'Ιουλ', 'Αυγ', 'Σεπ', 'Οκτ', 'Νοε', 'Δεκ']
-
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   working:    { bg: 'bg-green-50 border-green-200',   text: 'text-green-600',  label: 'Εργάζεται' },
   break:      { bg: 'bg-amber-50 border-amber-200',   text: 'text-amber-600',  label: 'Διάλειμμα' },
@@ -53,7 +45,6 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }>
   off:        { bg: 'bg-slate-50 border-slate-200',   text: 'text-slate-400',  label: 'Ρεπό' },
   redeployed: { bg: 'bg-purple-50 border-purple-200', text: 'text-purple-600', label: 'Ανάθεση' },
 }
-
 const STATUS_TABS: { key: 'all' | EmployeeStatus; label: string }[] = [
   { key: 'all',        label: 'Όλοι' },
   { key: 'working',   label: 'Εργάζονται' },
@@ -64,21 +55,17 @@ const STATUS_TABS: { key: 'all' | EmployeeStatus; label: string }[] = [
 ]
 
 // ── Mock data helpers (seeded by employee id for consistency) ─────────────────
-
 function seededVal(seed: number, i: number): number {
   return (Math.sin(seed * 9301 + i * 49297 + 233) * 0.5 + 0.5)
 }
-
 function empSeed(emp: Employee): number {
   return emp.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0)
 }
-
 function getEmpBaseline(emp: Employee): number {
   return emp.productivity?.find(p => p.role === emp.primary_role)?.units_per_hour
     ?? ROLE_BENCHMARK[emp.primary_role]
     ?? 100
 }
-
 /** 12-week productivity history */
 function getProductivityHistory(emp: Employee) {
   const seed = empSeed(emp)
@@ -87,7 +74,7 @@ function getProductivityHistory(emp: Employee) {
   return Array.from({ length: 12 }, (_, i) => {
     const d = new Date(now)
     d.setDate(d.getDate() - (11 - i) * 7)
-    const noise = (seededVal(seed, i) - 0.5) * 0.2   // ±10%
+    const noise = (seededVal(seed, i) - 0.5) * 0.2
     return {
       week: `W${i + 1}`,
       label: `${MONTHS_SHORT[d.getMonth()]} ${d.getDate()}`,
@@ -96,7 +83,6 @@ function getProductivityHistory(emp: Employee) {
     }
   })
 }
-
 /** Simulated yesterday UPH */
 function getYesterdayUPH(emp: Employee): number {
   const baseline = getEmpBaseline(emp)
@@ -104,15 +90,23 @@ function getYesterdayUPH(emp: Employee): number {
   return Math.round(baseline * (1 + noise))
 }
 
+// ── Greek name normalization ──────────────────────────────────────────────────
+function normGreek(s: string) {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
+}
+// Oracle format: "Firstname Lastname" → match on surname (last word) only
+// App format: "LASTNAME FIRSTNAME" → surname is first part
+function nameMatch(empName: string, oracleNoma: string): boolean {
+  const parts = oracleNoma.trim().split(/\s+/)
+  const surname = parts[parts.length - 1]
+  return surname.length > 3 && normGreek(empName).includes(normGreek(surname))
+}
 
 // ── EmployeeDetailPanel ───────────────────────────────────────────────────────
-
 function EmployeeDetailPanel({
-  emp, teamAvgYesterday, teamQ3Avg, weekShifts, prodSnap, onEdit, onClose, onBreak, onSick,
+  emp, weekShifts, prodSnap, onEdit, onClose, onBreak, onSick,
 }: {
   emp: Employee
-  teamAvgYesterday: number
-  teamQ3Avg: number
   weekShifts: Record<string, (Shift | null)[]> | undefined
   prodSnap: ProdSnapshot | null
   onEdit: () => void
@@ -120,47 +114,28 @@ function EmployeeDetailPanel({
   onBreak: () => Promise<void>
   onSick: () => Promise<void>
 }) {
-  const history    = getProductivityHistory(emp)
-  const yUPH       = getYesterdayUPH(emp)
-  const benchmark  = getEmpBaseline(emp)
-  const empShifts  = weekShifts?.[emp.id] ?? null
-  const q3Avg      = Math.round(history.reduce((a, b) => a + b.uph, 0) / history.length)
-  const diffYest   = Math.round(((yUPH - teamAvgYesterday) / teamAvgYesterday) * 100)
-  const diffQ3     = Math.round(((q3Avg - teamQ3Avg) / teamQ3Avg) * 100)
-  const cfg        = STATUS_CONFIG[emp.current_status]
-  const trend      = history[11].uph - history[8].uph
-  const isAlert    = yUPH < benchmark * 0.85
+  const empShifts = weekShifts?.[emp.id] ?? null
+  const cfg       = STATUS_CONFIG[emp.current_status]
 
-  const maxUPH = Math.max(yUPH, teamAvgYesterday, benchmark, 1)
-
-  // ── Live productivity from WMS ──────────────────────────────────────────────
   const isPicker = emp.primary_role === 'picker'
   const isPacker = emp.primary_role === 'packer'
-  const normName = (s: string) => s.trim().toLowerCase()
-  const empNorm  = normName(emp.full_name)
 
-  const todayRows  = isPicker ? prodSnap?.pickers_today  : isPacker ? prodSnap?.packers_today  : []
-  const monthRows  = isPicker ? prodSnap?.pickers_month  : isPacker ? prodSnap?.packers_month  : []
-  const teamToday  = isPicker ? prodSnap?.team_avg_pickers_today : isPacker ? prodSnap?.team_avg_packers_today : null
-  const teamMonth  = isPicker ? prodSnap?.team_avg_pickers_month : isPacker ? prodSnap?.team_avg_packers_month : null
+  const todayRows = isPicker ? prodSnap?.pickers_today : isPacker ? prodSnap?.packers_today : []
+  const monthRows = isPicker ? prodSnap?.pickers_month : isPacker ? prodSnap?.packers_month : []
+  const teamToday = isPicker ? prodSnap?.team_avg_pickers_today : isPacker ? prodSnap?.team_avg_packers_today : null
+  const teamMonth = isPicker ? prodSnap?.team_avg_pickers_month : isPacker ? prodSnap?.team_avg_packers_month : null
 
-  const todayRow  = todayRows?.find(r => normName(r.ONOMA) === empNorm) ?? null
-  const monthRow  = monthRows?.find(r => normName(r.ONOMA) === empNorm) ?? null
+  const todayRow = todayRows?.find(r => nameMatch(emp.full_name, r.ONOMA)) ?? null
+  const monthRow = monthRows?.find(r => nameMatch(emp.full_name, r.ONOMA)) ?? null
 
-  const liveUPH   = todayRow?.UPH ?? null
-  const monthUPH  = monthRow?.UPH_AVG ?? null
-  const hasProd   = (isPicker || isPacker) && prodSnap !== null
+  const liveUPH  = todayRow?.UPH ?? null
+  const monthUPH = monthRow?.UPH_AVG ?? null
+  const hasProd  = (isPicker || isPacker) && prodSnap !== null
 
   const diffVsTeamToday = liveUPH && teamToday
     ? Math.round(((liveUPH - teamToday) / teamToday) * 100) : null
   const diffVsTeamMonth = monthUPH && teamMonth
     ? Math.round(((monthUPH - teamMonth) / teamMonth) * 100) : null
-
-  const bars = [
-    { label: 'Εργαζόμενος χθες', value: yUPH,               color: '#3b82f6' },
-    { label: 'Μέσος ομάδας χθες', value: teamAvgYesterday,   color: '#94a3b8' },
-    { label: 'Benchmark ρόλου',   value: benchmark,           color: '#e2e8f0' },
-  ]
 
   return (
     <div className="w-80 flex-shrink-0 bg-white rounded-xl border border-slate-200 flex flex-col overflow-hidden">
@@ -205,80 +180,6 @@ function EmployeeDetailPanel({
         <div className="flex gap-2 flex-wrap">
           <RoleBadge role={emp.primary_role} />
           {emp.secondary_role && <RoleBadge role={emp.secondary_role} />}
-        </div>
-
-        {/* Alert banner */}
-        {isAlert && (
-          <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-            <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
-            <span className="text-xs text-red-600">Απόδοση χθες &gt;15% κάτω από benchmark</span>
-          </div>
-        )}
-
-        {/* Yesterday KPIs */}
-        <div>
-          <div className="text-[10px] font-mono uppercase tracking-widest text-slate-400 mb-2">Χθεσινή vs Ομάδα</div>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="bg-slate-50 rounded-lg p-2 text-center">
-              <div className="text-xl font-bold font-mono text-slate-800">{yUPH}</div>
-              <div className="text-[10px] text-slate-400">UPH χθες</div>
-            </div>
-            <div className="bg-slate-50 rounded-lg p-2 text-center">
-              <div className="text-xl font-bold font-mono text-slate-400">{teamAvgYesterday}</div>
-              <div className="text-[10px] text-slate-400">Μέσος ομάδας</div>
-            </div>
-            <div className={cn('rounded-lg p-2 text-center', diffYest >= 0 ? 'bg-green-50' : 'bg-red-50')}>
-              <div className={cn('text-xl font-bold font-mono', diffYest >= 0 ? 'text-green-600' : 'text-red-500')}>
-                {diffYest > 0 ? '+' : ''}{diffYest}%
-              </div>
-              <div className="text-[10px] text-slate-400">vs Ομάδα</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Quarterly comparison */}
-        <div>
-          <div className="text-[10px] font-mono uppercase tracking-widest text-slate-400 mb-2">Τρίμηνο (12 εβδ.)</div>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="bg-slate-50 rounded-lg p-2 text-center">
-              <div className="text-xl font-bold font-mono text-slate-800">{q3Avg}</div>
-              <div className="text-[10px] text-slate-400">UPH μέσος</div>
-            </div>
-            <div className="bg-slate-50 rounded-lg p-2 text-center">
-              <div className="text-xl font-bold font-mono text-slate-400">{teamQ3Avg}</div>
-              <div className="text-[10px] text-slate-400">Μέσος ομάδας</div>
-            </div>
-            <div className={cn('rounded-lg p-2 text-center', diffQ3 >= 0 ? 'bg-green-50' : 'bg-red-50')}>
-              <div className={cn('text-xl font-bold font-mono', diffQ3 >= 0 ? 'text-green-600' : 'text-red-500')}>
-                {diffQ3 > 0 ? '+' : ''}{diffQ3}%
-              </div>
-              <div className="text-[10px] text-slate-400">vs Ομάδα</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Horizontal bar comparison */}
-        <div>
-          <div className="text-[10px] font-mono uppercase tracking-widest text-slate-400 mb-2">Σύγκριση χθες</div>
-          <div className="space-y-2">
-            {bars.map(({ label, value, color }) => (
-              <div key={label}>
-                <div className="flex justify-between text-[10px] text-slate-500 mb-1">
-                  <span>{label}</span>
-                  <span className="font-mono font-semibold text-slate-700">{value}</span>
-                </div>
-                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{
-                      width: `${Math.min(100, (value / (maxUPH * 1.1)) * 100)}%`,
-                      backgroundColor: color,
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
 
         {/* Live WMS Productivity */}
@@ -363,35 +264,6 @@ function EmployeeDetailPanel({
           </div>
         )}
 
-        {/* 12-week line chart */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-[10px] font-mono uppercase tracking-widest text-slate-400">Τάση 12 εβδομάδων</div>
-            <div className="flex items-center gap-1 text-xs text-slate-400">
-              {trend > 2
-                ? <><TrendingUp className="w-3 h-3 text-green-500" /><span className="text-green-500">+{Math.round(trend)}</span></>
-                : trend < -2
-                ? <><TrendingDown className="w-3 h-3 text-red-400" /><span className="text-red-400">{Math.round(trend)}</span></>
-                : <><Minus className="w-3 h-3" /><span>Σταθερό</span></>
-              }
-            </div>
-          </div>
-          <ResponsiveContainer width="100%" height={100}>
-            <LineChart data={history} margin={{ top: 5, right: 5, bottom: 0, left: -25 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="week" tick={{ fontSize: 9, fill: '#cbd5e1' }} axisLine={false} tickLine={false} interval={2} />
-              <YAxis tick={{ fontSize: 9, fill: '#cbd5e1' }} axisLine={false} tickLine={false} />
-              <ReferenceLine y={benchmark} stroke="#e2e8f0" strokeDasharray="4 4" strokeWidth={1.5} />
-              <Line type="monotone" dataKey="uph" stroke="#3b82f6" strokeWidth={2} dot={false} />
-              <Tooltip
-                formatter={(v: number) => [`${v} UPH`, 'Παραγωγή']}
-                labelFormatter={(l: string) => history.find(h => h.week === l)?.label ?? l}
-                contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e2e8f0', padding: '4px 8px' }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-
         {/* Weekly schedule */}
         <div>
           <div className="flex items-center justify-between mb-2">
@@ -466,7 +338,6 @@ function EmployeeDetailPanel({
 }
 
 // ── TeamPage ──────────────────────────────────────────────────────────────────
-
 export function TeamPage() {
   const employees = useAppStore(s => s.employees)
   const [tab,        setTab]        = useState<'all' | EmployeeStatus>('all')
@@ -476,14 +347,13 @@ export function TeamPage() {
   const [showImport, setShowImport] = useState(false)
   const [editEmp,    setEditEmp]    = useState<Employee | null>(null)
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null)
-
   const { data: weekShifts } = useWeekShifts()
   const [prodSnap, setProdSnap] = useState<ProdSnapshot | null>(null)
 
   useEffect(() => {
     supabase.from('productivity_snapshots')
-      .select('*').order('created_at', { ascending: false }).limit(1).single()
-      .then(({ data }) => { if (data) setProdSnap(data as ProdSnapshot) })
+      .select('*').order('generated_at', { ascending: false }).limit(1).single()
+      .then(({ data }) => { if (data?.payload) setProdSnap(data.payload as ProdSnapshot) })
   }, [])
 
   const updateStatus = useUpdateEmployeeStatus()
@@ -499,23 +369,19 @@ export function TeamPage() {
     return true
   })
 
-  // Compute team averages per role (yesterday + quarterly)
-  const { roleAvgYesterday, roleQ3Avg } = useMemo(() => {
-    const byRole: Record<string, { y: number[]; q: number[] }> = {}
+  // Compute team averages per role (for list display)
+  const roleAvgYesterday = useMemo(() => {
+    const byRole: Record<string, number[]> = {}
     employees.forEach(emp => {
       const role = emp.primary_role
-      if (!byRole[role]) byRole[role] = { y: [], q: [] }
-      byRole[role].y.push(getYesterdayUPH(emp))
-      const hist = getProductivityHistory(emp)
-      byRole[role].q.push(Math.round(hist.reduce((a, b) => a + b.uph, 0) / hist.length))
+      if (!byRole[role]) byRole[role] = []
+      byRole[role].push(getYesterdayUPH(emp))
     })
-    const roleAvgYesterday: Record<string, number> = {}
-    const roleQ3Avg: Record<string, number> = {}
-    Object.entries(byRole).forEach(([role, { y, q }]) => {
-      roleAvgYesterday[role] = Math.round(y.reduce((a, b) => a + b, 0) / y.length)
-      roleQ3Avg[role]        = Math.round(q.reduce((a, b) => a + b, 0) / q.length)
+    const result: Record<string, number> = {}
+    Object.entries(byRole).forEach(([role, vals]) => {
+      result[role] = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length)
     })
-    return { roleAvgYesterday, roleQ3Avg }
+    return result
   }, [employees])
 
   async function handleBreak(emp: Employee, e?: React.MouseEvent) {
@@ -558,7 +424,6 @@ export function TeamPage() {
           </div>
         }
       />
-
       <div className="p-6">
         {/* Status summary cards */}
         <div className="grid grid-cols-6 gap-3 mb-6">
@@ -597,7 +462,6 @@ export function TeamPage() {
               </button>
             ))}
           </div>
-
           <select
             value={roleFilter}
             onChange={e => setRoleFilter(e.target.value as EmployeeRole | 'all')}
@@ -608,7 +472,6 @@ export function TeamPage() {
               <option key={role} value={role}>{cfg.label}</option>
             ))}
           </select>
-
           <div className="relative max-w-xs flex-1">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
@@ -618,7 +481,6 @@ export function TeamPage() {
               className="input pl-8 text-xs"
             />
           </div>
-
           <div className="ml-auto text-xs text-slate-400">{filtered.length} εμφανίζονται</div>
         </div>
 
@@ -656,7 +518,6 @@ export function TeamPage() {
                         isSelected && 'bg-blue-50/70'
                       )}
                     >
-                      {/* Employee */}
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div
@@ -674,22 +535,17 @@ export function TeamPage() {
                           <span className="font-semibold text-slate-800 truncate">{emp.full_name}</span>
                         </div>
                       </td>
-
                       <td className="px-4 py-3 font-mono text-xs text-slate-400">{emp.employee_code}</td>
-
                       <td className="px-4 py-3"><RoleBadge role={emp.primary_role} /></td>
-
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1.5">
                           <div className={cn('w-2 h-2 rounded-full', cfg?.dot ?? 'bg-slate-300')} />
                           <span className="text-xs font-medium text-slate-600">{cfg?.label ?? emp.current_status}</span>
                         </div>
                       </td>
-
                       <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-700">
                         {yUPH} <span className="font-normal text-slate-400 text-[10px]">UPH</span>
                       </td>
-
                       <td className="px-4 py-3">
                         <span className={cn(
                           'text-xs font-semibold',
@@ -698,7 +554,6 @@ export function TeamPage() {
                           {diffPct > 0 ? '+' : ''}{diffPct}%
                         </span>
                       </td>
-
                       <td className="px-4 py-3">
                         {trend > 3
                           ? <TrendingUp className="w-4 h-4 text-green-500" />
@@ -707,8 +562,6 @@ export function TeamPage() {
                           : <Minus className="w-4 h-4 text-slate-300" />
                         }
                       </td>
-
-                      {/* Actions — stopPropagation so row click doesn't fire */}
                       <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-1">
                           <button
@@ -741,7 +594,6 @@ export function TeamPage() {
                     </tr>
                   )
                 })}
-
                 {filtered.length === 0 && (
                   <tr>
                     <td colSpan={8} className="px-4 py-12 text-center text-slate-400 text-sm">
@@ -757,8 +609,6 @@ export function TeamPage() {
           {selectedEmp && (
             <EmployeeDetailPanel
               emp={selectedEmp}
-              teamAvgYesterday={roleAvgYesterday[selectedEmp.primary_role] ?? 100}
-              teamQ3Avg={roleQ3Avg[selectedEmp.primary_role] ?? 100}
               weekShifts={weekShifts}
               prodSnap={prodSnap}
               onEdit={() => { setEditEmp(selectedEmp); setShowModal(true) }}
@@ -776,7 +626,6 @@ export function TeamPage() {
           onClose={() => { setShowModal(false); setEditEmp(null) }}
         />
       )}
-
       {showImport && (
         <ScheduleImportModal onClose={() => setShowImport(false)} />
       )}
