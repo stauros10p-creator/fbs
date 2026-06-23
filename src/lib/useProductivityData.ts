@@ -7,8 +7,8 @@ import { useAppStore } from '@/store'
 import type { Employee } from '@/types'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-export interface ProdRow      { ONOMA: string; ORDERS: number; ORES: number; UPH: number | null }
-export interface ProdMonthRow { ONOMA: string; UPH_AVG: number; ORDERS_AVG: number }
+export interface ProdRow      { ONOMA: string; ORDERS: number; ITEMS?: number; ORES: number; UPH: number | null }
+export interface ProdMonthRow { ONOMA: string; UPH_AVG: number; ORDERS_AVG: number; ITEMS_AVG?: number }
 
 export interface ProdSnapshot {
   pickers_today:            ProdRow[]
@@ -55,7 +55,7 @@ export const OPERATOR_CODES: Record<string, string> = {
   pgog: 'Γκογκακη',      itso: 'Τσολαριδου',           nkou: 'Κουσουρης',
   tiak: 'Ιακωβιδης',     gkav: 'Καββαδας',             erhy: 'Χυσσολι',
   msia: 'Σιαμεζ',        epso: 'Ψωμαδελη',             kman: 'Μανουσακιδης',
-  luna: 'Luna',          mark: 'Siblag',                edes: 'Edesl',
+  luna: 'Luna',          mark: 'Mark Carlo',            edes: 'Charl',
   skar: 'Καρρας',        mois: 'Moises',                ioak: 'Ιωακειμιδης',
   tmav: 'Μαβιδη',        mfit: 'Φιτσαλου',
 }
