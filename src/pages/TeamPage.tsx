@@ -168,7 +168,7 @@ export function TeamPage() {
 
           {/* Mean productivity */}
           <button
-            onClick={() => navigate('/team/ranking')}
+            onClick={() => navigate('/team/employees')}
             className="bg-white rounded-xl border border-slate-200 p-4 text-left hover:border-emerald-300 hover:shadow-md transition-all group"
           >
             <div className="flex items-center justify-between mb-3">
@@ -208,7 +208,7 @@ export function TeamPage() {
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-slate-700">Απόδοση ανά Ρόλο</h2>
             <button
-              onClick={() => navigate('/team/ranking')}
+              onClick={() => navigate('/team/employees')}
               className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1"
             >Αναλυτικά<ChevronRight className="w-3 h-3" /></button>
           </div>
@@ -216,7 +216,7 @@ export function TeamPage() {
             {roleStats.map(role => (
               <button
                 key={role.key}
-                onClick={() => navigate(`/team/ranking?role=${role.key}`)}
+                onClick={() => navigate('/team/employees')}
                 className="bg-white rounded-xl border border-slate-200 p-4 text-left hover:shadow-md transition-all group"
               >
                 <div className="flex items-center justify-between mb-2">
@@ -359,12 +359,12 @@ export function TeamPage() {
             <div className="text-xs opacity-75 mt-0.5">Αξία ανά εργαζόμενο (0-100)</div>
           </button>
           <button
-            onClick={() => navigate('/team/ranking')}
+            onClick={() => navigate('/team/employees')}
             className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl p-4 text-left hover:opacity-90 transition-opacity"
           >
             <BarChart2 className="w-5 h-5 mb-2 opacity-80" />
-            <div className="font-semibold text-sm">Ranking ανά Ρόλο</div>
-            <div className="text-xs opacity-75 mt-0.5">Κατάταξη και στατιστικά ρόλου</div>
+            <div className="font-semibold text-sm">Λίστα Εργαζομένων</div>
+            <div className="text-xs opacity-75 mt-0.5">Κλικ για στατιστικά ανά εργαζόμενο</div>
           </button>
         </div>
 
@@ -407,7 +407,7 @@ export function TeamPage() {
                     <tr
                       key={emp.id}
                       className="hover:bg-slate-50/80 transition-colors cursor-pointer"
-                      onClick={() => navigate(`/team/ranking?emp=${emp.id}`)}
+                      onClick={() => navigate(`/team/employees/${emp.id}`)}
                     >
                       <td className="px-4 py-3 text-xs text-slate-400 font-mono">{i + 1}</td>
                       <td className="px-4 py-3">
