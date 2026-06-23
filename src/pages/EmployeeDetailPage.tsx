@@ -83,7 +83,7 @@ export function EmployeeDetailPage() {
         days.push({
           date,
           orders: row?.ORDERS ?? null,
-          items:  row?.ITEMS  ?? null,
+          items:  (row as any)?.ITEMS ?? null,
           uph:    (row?.UPH != null && row.UPH > 0) ? row.UPH : null,
           hours:  row?.ORES   ?? null,
         })
