@@ -184,7 +184,7 @@ export function ImpactScorePage() {
               <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
               <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
               <Tooltip
-                formatter={(v: number, _: string, p: { payload: typeof barData[0] }) => [`${v} (${p.payload.label})`, 'Impact Score']}
+                formatter={(v: number, _: string, p: any) => [`${v} (${p.payload.label})`, 'Impact Score']}
                 contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e2e8f0' }}
               />
               <Bar dataKey="score" radius={[4, 4, 0, 0]}>
