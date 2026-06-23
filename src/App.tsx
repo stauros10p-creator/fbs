@@ -6,7 +6,6 @@ import { TeamPage } from '@/pages/TeamPage'
 import { EmployeeListPage } from '@/pages/EmployeeListPage'
 import { EmployeeDetailPage } from '@/pages/EmployeeDetailPage'
 import { TopPerformersPage } from '@/pages/TopPerformersPage'
-import { RoleRankingPage } from '@/pages/RoleRankingPage'
 import { ImpactScorePage } from '@/pages/ImpactScorePage'
 import { ProductivityHeatmapPage } from '@/pages/ProductivityHeatmapPage'
 import { SchedulePage } from '@/pages/SchedulePage'
@@ -30,7 +29,6 @@ export default function App() {
             <Route path="/team/employees"          element={<EmployeeListPage />} />
             <Route path="/team/employees/:id"      element={<EmployeeDetailPage />} />
             <Route path="/team/top-performers"     element={<TopPerformersPage />} />
-            <Route path="/team/ranking"            element={<RoleRankingPage />} />
             <Route path="/team/impact"             element={<ImpactScorePage />} />
             <Route path="/team/heatmap"            element={<ProductivityHeatmapPage />} />
             <Route path="/schedule"                element={<SchedulePage />} />
