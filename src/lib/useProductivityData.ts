@@ -40,6 +40,8 @@ export interface EmployeeMetrics {
   consistencyScore: number          // 0-100
   impactScore:      number          // 0-100
   impactLabel:      string
+  flexibilityRoles: number          // 1-3 roles active
+  flexibilityScore: number          // 0-100
   rating:           string
   ratingStars:      number
   ratingColor:      string
@@ -90,13 +92,21 @@ export function getRating(score: number): { label: string; stars: number; color:
 export function getImpactLabel(score: number): string {
   if (score >= 95) return 'Critical Asset'
   if (score >= 85) return 'High Impact'
-  if (score >= 70) return 'Valuable Contributor'
-  if (score >= 50) return 'Standard Contributor'
+  if (score >= 70) return 'Strong Contributor'
+  if (score >= 55) return 'Contributor'
   return 'Developing'
 }
 
+export function impactColor(score: number): string {
+  if (score >= 85) return '#22c55e'
+  if (score >= 70) return '#f59e0b'
+  if (score >= 55) return '#f97316'
+  return '#ef4444'
+}
+
 // ── Compute Per-Employee Metrics ──────────────────────────────────────────────
-export function computeMetrics(emp: Employee, snap: ProdSnapshot | null): EmployeeMetrics {
+// maxUPH: pass the team's max UPH for normalization (two-pass from hook)
+export function computeMetrics(emp: Employee, snap: ProdSnapshot | null, maxUPH = 200): EmployeeMetrics {
   // Search ALL role arrays for today — role-agnostic
   const allTodayRows = [
     ...(snap?.pickers_today   ?? []),
@@ -139,12 +149,22 @@ export function computeMetrics(emp: Employee, snap: ProdSnapshot | null): Employ
     ? Math.max(0, Math.min(100, Math.round(100 - Math.abs((todayUPH - monthUPH) / monthUPH) * 100)))
     : Math.round((parseInt(emp.skill_level) / 5) * 55 + 25)
 
-  const uphComp    = monthUPH    ? Math.min(35, (monthUPH    / 180) * 35) : 0
-  const ordComp    = ordersMonth ? Math.min(20, (ordersMonth / 600) * 20) : 0
-  const hrsComp    = hoursToday  ? Math.min(15, (hoursToday  / 8)   * 15) : 0
-  const trendComp  = trend != null ? Math.max(0, Math.min(15, 7.5 + trend * 0.35)) : 7
-  const flexComp   = ((emp.flexibility ?? 1) / 5) * 15
-  const impactScore = Math.min(100, Math.round(uphComp + ordComp + hrsComp + trendComp + flexComp))
+  // ── Flexibility: count roles this employee has been active in ──────────────
+  const inPickers   = [...(snap?.pickers_today   ?? []), ...(snap?.pickers_month   ?? [])].some(r => nameMatch(emp.full_name, r.ONOMA))
+  const inPackers   = [...(snap?.packers_today   ?? []), ...(snap?.packers_month   ?? [])].some(r => nameMatch(emp.full_name, r.ONOMA))
+  const inOperators = [...(snap?.operators_today ?? []), ...(snap?.operators_month ?? [])].some(r => nameMatch(emp.full_name, r.ONOMA))
+  const flexibilityRoles = [inPickers, inPackers, inOperators].filter(Boolean).length
+  const flexibilityScore = Math.round((Math.max(1, flexibilityRoles) / 3) * 100)
+
+  // ── Impact Score: Productivity 50% + Flexibility 30% + Trend 20% ──────────
+  // Productivity: monthUPH (or todayUPH) relative to team max
+  const uphForCalc = monthUPH ?? todayUPH
+  const uphPct     = uphForCalc != null ? Math.min(100, (uphForCalc / maxUPH) * 100) : 0
+  // Trend: 0% trend → 50 score, ±50% → 0/100
+  const trendPct   = trend != null ? Math.min(100, Math.max(0, 50 + trend * 0.5)) : 50
+  const impactScore = hasData
+    ? Math.min(100, Math.round(uphPct * 0.5 + flexibilityScore * 0.3 + trendPct * 0.2))
+    : 0
 
   const { label: rating, stars: ratingStars, color: ratingColor } = getRating(impactScore)
   const impactLabel = getImpactLabel(impactScore)
@@ -157,6 +177,7 @@ export function computeMetrics(emp: Employee, snap: ProdSnapshot | null): Employ
   return {
     employee: emp, todayUPH, monthUPH, hoursToday, ordersToday, ordersMonth,
     trend, consistencyScore, impactScore, impactLabel,
+    flexibilityRoles, flexibilityScore,
     rating, ratingStars, ratingColor,
     teamAvgToday, vsTeamToday, vsTeamMonth, hasData,
   }
@@ -177,10 +198,13 @@ export function useProductivityData() {
       })
   }, [])
 
-  const allMetrics = useMemo(
-    () => employees.map(e => computeMetrics(e, prodSnap)),
-    [employees, prodSnap]
-  )
+  const allMetrics = useMemo(() => {
+    // Pass 1: compute raw metrics to find team's max UPH
+    const raw    = employees.map(e => computeMetrics(e, prodSnap))
+    const maxUPH = Math.max(1, ...raw.filter(m => m.monthUPH != null).map(m => m.monthUPH!))
+    // Pass 2: recompute with correct maxUPH for normalized productivity
+    return employees.map(e => computeMetrics(e, prodSnap, maxUPH))
+  }, [employees, prodSnap])
 
   const withData = useMemo(
     () => allMetrics.filter(m => m.hasData),
