@@ -8,13 +8,29 @@ import { ROLE_CONFIG } from '@/types'
 import { cn, initials } from '@/lib/utils'
 
 type SortKey = 'name' | 'orders' | 'uph' | 'trend'
+type RoleFilter = 'all' | 'picker' | 'packer' | 'operator'
+
+const ROLE_FILTERS: { key: RoleFilter; label: string }[] = [
+  { key: 'all',      label: 'Όλοι' },
+  { key: 'picker',   label: 'Picker' },
+  { key: 'packer',   label: 'Packer' },
+  { key: 'operator', label: 'Operator' },
+]
+
+const SORT_BUTTONS: { key: SortKey; label: string }[] = [
+  { key: 'uph',    label: 'Orders/Hour' },
+  { key: 'orders', label: 'Παραγγελίες' },
+  { key: 'trend',  label: 'Trend' },
+  { key: 'name',   label: 'Αλφαβητικά' },
+]
 
 export function EmployeeListPage() {
   const navigate = useNavigate()
   const { allMetrics } = useProductivityData()
-  const [search, setSearch] = useState('')
-  const [sort, setSort] = useState<SortKey>('uph')
-  const [asc, setAsc] = useState(false)
+  const [search,     setSearch]     = useState('')
+  const [sort,       setSort]       = useState<SortKey>('uph')
+  const [asc,        setAsc]        = useState(false)
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>('all')
 
   const toggleSort = (key: SortKey) => {
     if (sort === key) setAsc(a => !a)
@@ -22,7 +38,11 @@ export function EmployeeListPage() {
   }
 
   const filtered = allMetrics
-    .filter(m => m.employee.full_name.toLowerCase().includes(search.toLowerCase()))
+    .filter(m => {
+      if (roleFilter !== 'all' && m.employee.primary_role !== roleFilter) return false
+      if (search) return m.employee.full_name.toLowerCase().includes(search.toLowerCase())
+      return true
+    })
     .sort((a, b) => {
       if (sort === 'name') {
         return asc
@@ -30,22 +50,20 @@ export function EmployeeListPage() {
           : b.employee.full_name.localeCompare(a.employee.full_name)
       }
       let va: number, vb: number
-      if (sort === 'orders') { va = a.ordersToday ?? -1; vb = b.ordersToday ?? -1 }
-      else if (sort === 'trend') { va = a.trend ?? -999; vb = b.trend ?? -999 }
-      else { va = a.todayUPH ?? -1; vb = b.todayUPH ?? -1 }
+      if (sort === 'orders')      { va = a.ordersToday ?? -1; vb = b.ordersToday ?? -1 }
+      else if (sort === 'trend')  { va = a.trend ?? -999;     vb = b.trend ?? -999 }
+      else                        { va = a.todayUPH ?? -1;    vb = b.todayUPH ?? -1 }
       return asc ? va - vb : vb - va
     })
 
-  const withData = allMetrics.filter(m => m.todayUPH != null).length
-
-  const SortIcon = ({ k }: { k: SortKey }) =>
-    sort === k
-      ? (asc ? <ChevronUp className="w-3 h-3 inline ml-0.5" /> : <ChevronDown className="w-3 h-3 inline ml-0.5" />)
-      : null
+  const withData   = allMetrics.filter(m => m.todayUPH != null).length
+  const roleCount  = (role: RoleFilter) =>
+    role === 'all' ? allMetrics.length : allMetrics.filter(m => m.employee.primary_role === role).length
 
   return (
     <div className="min-h-full bg-slate-50">
-      {/* Header */}
+
+      {/* ── Header ────────────────────────────────────────────────────────── */}
       <div className="bg-white border-b border-slate-200 px-6 py-4">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/team')} className="p-2 rounded-lg hover:bg-slate-100">
@@ -69,34 +87,78 @@ export function EmployeeListPage() {
         </div>
       </div>
 
-      <div className="p-6">
+      <div className="p-6 space-y-4">
+
+        {/* ── Filters + Sort ────────────────────────────────────────────────── */}
+        <div className="flex items-center gap-3 flex-wrap">
+
+          {/* Role filter */}
+          <div className="flex gap-1.5 bg-white border border-slate-200 rounded-xl p-1">
+            {ROLE_FILTERS.map(({ key, label }) => {
+              const rc = ROLE_CONFIG[key as keyof typeof ROLE_CONFIG]
+              const active = roleFilter === key
+              return (
+                <button
+                  key={key}
+                  onClick={() => setRoleFilter(key)}
+                  className={cn(
+                    'px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5',
+                    active
+                      ? key === 'all' ? 'bg-slate-800 text-white' : 'text-white'
+                      : 'text-slate-500 hover:bg-slate-100'
+                  )}
+                  style={active && key !== 'all' ? { background: rc?.color } : {}}
+                >
+                  {label}
+                  <span className={cn('text-[10px] rounded-full px-1.5 py-0.5 font-bold',
+                    active ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'
+                  )}>
+                    {roleCount(key)}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="w-px h-5 bg-slate-200" />
+
+          {/* Sort buttons */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider font-medium">Ταξινόμηση:</span>
+            {SORT_BUTTONS.map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => toggleSort(key)}
+                className={cn(
+                  'flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border',
+                  sort === key
+                    ? 'bg-slate-800 text-white border-slate-800'
+                    : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+                )}
+              >
+                {label}
+                {sort === key && (
+                  asc ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
+                )}
+              </button>
+            ))}
+          </div>
+
+          <span className="ml-auto text-xs text-slate-400">{filtered.length} εμφανίζονται</span>
+        </div>
+
+        {/* ── Table ─────────────────────────────────────────────────────────── */}
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <table className="w-full">
             <thead className="bg-slate-50 border-b border-slate-100">
               <tr>
-                <th className="px-5 py-3 text-left text-[10px] font-medium tracking-wider text-slate-400 uppercase">
-                  <button onClick={() => toggleSort('name')} className="hover:text-slate-600">
-                    Εργαζόμενος <SortIcon k="name" />
-                  </button>
-                </th>
+                <th className="px-5 py-3 text-left text-[10px] font-medium tracking-wider text-slate-400 uppercase">Εργαζόμενος</th>
                 <th className="px-5 py-3 text-left text-[10px] font-medium tracking-wider text-slate-400 uppercase">Ρόλος</th>
-                <th className="px-5 py-3 text-left text-[10px] font-medium tracking-wider text-slate-400 uppercase">
-                  <button onClick={() => toggleSort('orders')} className="hover:text-slate-600">
-                    Παραγγελίες <SortIcon k="orders" />
-                  </button>
-                </th>
+                <th className="px-5 py-3 text-left text-[10px] font-medium tracking-wider text-slate-400 uppercase">Παραγγελίες</th>
                 <th className="px-5 py-3 text-left text-[10px] font-medium tracking-wider text-slate-400 uppercase">Τεμάχια</th>
-                <th className="px-5 py-3 text-left text-[10px] font-medium tracking-wider text-slate-400 uppercase">
-                  <button onClick={() => toggleSort('uph')} className="hover:text-slate-600">
-                    Orders/Hour <SortIcon k="uph" />
-                  </button>
-                </th>
+                <th className="px-5 py-3 text-left text-[10px] font-medium tracking-wider text-slate-400 uppercase">Orders/Hour</th>
                 <th className="px-5 py-3 text-left text-[10px] font-medium tracking-wider text-slate-400 uppercase">Ώρες</th>
-                <th className="px-5 py-3 text-left text-[10px] font-medium tracking-wider text-slate-400 uppercase">
-                  <button onClick={() => toggleSort('trend')} className="hover:text-slate-600">
-                    Trend <SortIcon k="trend" />
-                  </button>
-                </th>
+                <th className="px-5 py-3 text-left text-[10px] font-medium tracking-wider text-slate-400 uppercase">Trend</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -129,7 +191,9 @@ export function EmployeeListPage() {
                         {rc?.label}
                       </span>
                     </td>
-                    <td className="px-5 py-3.5 text-sm font-mono text-slate-600">{m.ordersToday ?? '—'}</td>
+                    <td className="px-5 py-3.5 text-sm font-mono text-slate-600">
+                      {m.ordersToday ?? '—'}
+                    </td>
                     <td className="px-5 py-3.5 text-sm font-mono text-slate-400">—</td>
                     <td className="px-5 py-3.5">
                       <span className="text-sm font-bold font-mono" style={{ color: noData ? '#cbd5e1' : rc?.color }}>
@@ -142,7 +206,8 @@ export function EmployeeListPage() {
                     <td className="px-5 py-3.5">
                       <span className={cn('text-sm font-semibold',
                         m.trend == null ? 'text-slate-300'
-                        : m.trend >= 0 ? 'text-emerald-500' : 'text-red-500'
+                        : m.trend >= 0  ? 'text-emerald-500'
+                        : 'text-red-500'
                       )}>
                         {m.trend != null ? `${m.trend > 0 ? '+' : ''}${m.trend}%` : '—'}
                       </span>
@@ -160,6 +225,7 @@ export function EmployeeListPage() {
             </tbody>
           </table>
         </div>
+
       </div>
     </div>
   )
