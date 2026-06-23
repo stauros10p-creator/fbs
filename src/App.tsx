@@ -4,19 +4,19 @@ import { DataLoader } from '@/components/layout/DataLoader'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { TeamPage } from '@/pages/TeamPage'
 import { EmployeeListPage } from '@/pages/EmployeeListPage'
+import { EmployeeDetailPage } from '@/pages/EmployeeDetailPage'
 import { TopPerformersPage } from '@/pages/TopPerformersPage'
 import { RoleRankingPage } from '@/pages/RoleRankingPage'
 import { ImpactScorePage } from '@/pages/ImpactScorePage'
 import { ProductivityHeatmapPage } from '@/pages/ProductivityHeatmapPage'
-import { EmployeeDetailPage } from '@/pages/EmployeeDetailPage'
 import { SchedulePage } from '@/pages/SchedulePage'
 import { ForecastPage } from '@/pages/ForecastPage'
 import { OpsSnapshotPage } from '@/pages/OpsSnapshotPage'
+import { OpsLivePage } from '@/pages/OpsLivePage'
+import { OpsInboundPage } from '@/pages/OpsInboundPage'
 import { CopilotPage } from '@/pages/CopilotPage'
 import { StaffPlanPage } from '@/pages/StaffPlanPage'
 import { HourlyForecastPage } from '@/pages/HourlyForecastPage'
-import { OpsLivePage } from '@/pages/OpsLivePage'
-import { OpsInboundPage } from '@/pages/OpsInboundPage'
 
 export default function App() {
   return (
@@ -36,11 +36,11 @@ export default function App() {
             <Route path="/schedule"                element={<SchedulePage />} />
             <Route path="/forecast"                element={<ForecastPage />} />
             <Route path="/ops"                     element={<OpsSnapshotPage />} />
+            <Route path="/ops/live"                element={<OpsLivePage />} />
+            <Route path="/ops/inbound"             element={<OpsInboundPage />} />
             <Route path="/copilot"                 element={<CopilotPage />} />
             <Route path="/staff-plan"              element={<StaffPlanPage />} />
             <Route path="/hourly-forecast"         element={<HourlyForecastPage />} />
-            <Route path="/ops/live"               element={<OpsLivePage />} />
-            <Route path="/ops/inbound"            element={<OpsInboundPage />} />
           </Routes>
         </Layout>
       </DataLoader>
