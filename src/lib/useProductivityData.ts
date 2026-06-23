@@ -45,11 +45,30 @@ export interface EmployeeMetrics {
   hasData:          boolean
 }
 
+// ── Operator code → surname fragment mapping (AutoStore undef14 → Greek) ──────
+export const OPERATOR_CODES: Record<string, string> = {
+  pkan: 'Κανελλοπουλος', vtri: 'Τριανταφυλλοπουλος', kkou: 'Κουκας',
+  gpav: 'Παυλιδης',      mkar: 'Καρυπιδης',           akar: 'Καρυπιδης',
+  spap: 'Παππας',        mabi: 'Μπιζας',               span: 'Πανοπουλος',
+  fpap: 'Παπανικολαου',  gkok: 'Κοκολακη',             ppet: 'Πετροπουλος',
+  fsal: 'Σαλαχας',       xkon: 'Κωνσταντινιδης',       mthe: 'Θεοδωροπουλου',
+  pgog: 'Γκογκακη',      itso: 'Τσολαριδου',           nkou: 'Κουσουρης',
+  tiak: 'Ιακωβιδης',     gkav: 'Καββαδας',             erhy: 'Χυσσολι',
+  msia: 'Σιαμεζ',        epso: 'Ψωμαδελη',             kman: 'Μανουσακιδης',
+  luna: 'Luna',          mark: 'Siblag',                edes: 'Edesl',
+  skar: 'Καρρας',        mois: 'Moises',                ioak: 'Ιωακειμιδης',
+  tmav: 'Μαβιδη',        mfit: 'Φιτσαλου',
+}
+
 // ── Name Matching ─────────────────────────────────────────────────────────────
 export function normGreek(s: string): string {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 }
 export function nameMatch(empName: string, oracleNoma: string): boolean {
+  const code = oracleNoma.trim().toLowerCase()
+  if (OPERATOR_CODES[code]) {
+    return normGreek(empName).includes(normGreek(OPERATOR_CODES[code]))
+  }
   const parts = oracleNoma.trim().split(/\s+/)
   const surname = parts[parts.length - 1]
   return surname.length > 3 && normGreek(empName).includes(normGreek(surname))
