@@ -9,6 +9,7 @@ import type { Employee } from '@/types'
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface ProdRow      { ONOMA: string; ORDERS: number; ITEMS?: number; ORES: number; UPH: number | null }
 export interface ProdMonthRow { ONOMA: string; UPH_AVG: number; ORDERS_AVG: number; ITEMS_AVG?: number }
+export interface DayRow       { ONOMA: string; DAY: string; ORDERS: number; ITEMS: number; ORES: number; UPH: number | null }
 
 export interface ProdSnapshot {
   pickers_today:            ProdRow[]
@@ -17,6 +18,9 @@ export interface ProdSnapshot {
   packers_month:            ProdMonthRow[]
   operators_today?:         ProdRow[]
   operators_month?:         ProdMonthRow[]
+  pickers_days?:            DayRow[]
+  packers_days?:            DayRow[]
+  operators_days?:          DayRow[]
   team_avg_pickers_today:   number | null
   team_avg_pickers_month:   number | null
   team_avg_packers_today:   number | null
@@ -45,7 +49,7 @@ export interface EmployeeMetrics {
   hasData:          boolean
 }
 
-// ── Operator code → surname fragment mapping (AutoStore undef14 → Greek) ──────
+// ── Operator code → surname fragment mapping ───────────────────────────────────
 export const OPERATOR_CODES: Record<string, string> = {
   pkan: 'Κανελλοπουλος', vtri: 'Τριανταφυλλοπουλος', kkou: 'Κουκας',
   gpav: 'Παυλιδης',      mkar: 'Καρυπιδης',           akar: 'Καρυπιδης',
@@ -93,36 +97,39 @@ export function getImpactLabel(score: number): string {
 
 // ── Compute Per-Employee Metrics ──────────────────────────────────────────────
 export function computeMetrics(emp: Employee, snap: ProdSnapshot | null): EmployeeMetrics {
-  const isPicker   = emp.primary_role === 'picker'   || emp.secondary_role === 'picker'
-  const isPacker   = emp.primary_role === 'packer'   || emp.secondary_role === 'packer'
-  const isOperator = !isPicker && !isPacker &&
-    (emp.primary_role === 'operator' || emp.secondary_role === 'operator')
+  // Search ALL role arrays for today — role-agnostic
+  const allTodayRows = [
+    ...(snap?.pickers_today   ?? []),
+    ...(snap?.packers_today   ?? []),
+    ...(snap?.operators_today ?? []),
+  ]
+  const allMonthRows = [
+    ...(snap?.pickers_month   ?? []),
+    ...(snap?.packers_month   ?? []),
+    ...(snap?.operators_month ?? []),
+  ]
 
-  const todayRows = isPicker   ? snap?.pickers_today
-    : isPacker   ? snap?.packers_today
-    : isOperator ? snap?.operators_today
-    : undefined
-  const monthRows = isPicker   ? snap?.pickers_month
-    : isPacker   ? snap?.packers_month
-    : isOperator ? snap?.operators_month
-    : undefined
-  const teamAvgToday = isPicker   ? (snap?.team_avg_pickers_today  ?? null)
+  const todayRow = allTodayRows.find(r => nameMatch(emp.full_name, r.ONOMA)) ?? null
+  const monthRow = allMonthRows.find(r => nameMatch(emp.full_name, r.ONOMA)) ?? null
+
+  // For team avg, still use primary role
+  const isPicker   = emp.primary_role === 'picker'
+  const isPacker   = emp.primary_role === 'packer'
+  const isOperator = emp.primary_role === 'operator'
+  const teamAvgToday = isPicker ? (snap?.team_avg_pickers_today ?? null)
     : isPacker   ? (snap?.team_avg_packers_today  ?? null)
     : isOperator ? (snap?.team_avg_operators_today ?? null)
     : null
-  const teamAvgMonth = isPicker   ? (snap?.team_avg_pickers_month  ?? null)
+  const teamAvgMonth = isPicker ? (snap?.team_avg_pickers_month ?? null)
     : isPacker   ? (snap?.team_avg_packers_month  ?? null)
     : isOperator ? (snap?.team_avg_operators_month ?? null)
     : null
 
-  const todayRow = todayRows?.find(r => nameMatch(emp.full_name, r.ONOMA)) ?? null
-  const monthRow = monthRows?.find(r => nameMatch(emp.full_name, r.ONOMA)) ?? null
-
   const todayUPH    = (todayRow?.UPH != null && todayRow.UPH > 0) ? todayRow.UPH : null
-  const monthUPH    = (monthRow?.UPH_AVG != null && monthRow.UPH_AVG > 0) ? monthRow.UPH_AVG : null
+  const monthUPH    = (monthRow as any)?.UPH_AVG > 0 ? (monthRow as any).UPH_AVG : null
   const hoursToday  = todayRow?.ORES   ?? null
   const ordersToday = (todayRow?.ORDERS != null && todayRow.ORDERS > 0) ? todayRow.ORDERS : null
-  const ordersMonth = monthRow?.ORDERS_AVG ?? null
+  const ordersMonth = (monthRow as any)?.ORDERS_AVG ?? null
   const hasData     = todayUPH !== null || monthUPH !== null
 
   const trend = (todayUPH && monthUPH && monthUPH > 0)
@@ -132,7 +139,6 @@ export function computeMetrics(emp: Employee, snap: ProdSnapshot | null): Employ
     ? Math.max(0, Math.min(100, Math.round(100 - Math.abs((todayUPH - monthUPH) / monthUPH) * 100)))
     : Math.round((parseInt(emp.skill_level) / 5) * 55 + 25)
 
-  // Impact score (0–100): UPH + Orders volume + Hours + Trend + Flexibility
   const uphComp    = monthUPH    ? Math.min(35, (monthUPH    / 180) * 35) : 0
   const ordComp    = ordersMonth ? Math.min(20, (ordersMonth / 600) * 20) : 0
   const hrsComp    = hoursToday  ? Math.min(15, (hoursToday  / 8)   * 15) : 0
