@@ -1,0 +1,193 @@
+// src/lib/useProductivityData.ts
+// Shared hook & utilities for the employee analytics pages
+
+import { useState, useEffect, useMemo } from 'react'
+import { supabase } from './supabase'
+import { useAppStore } from '@/store'
+import type { Employee } from '@/types'
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+export interface ProdRow      { ONOMA: string; ORDERS: number; ORES: number; UPH: number | null }
+export interface ProdMonthRow { ONOMA: string; UPH_AVG: number; ORDERS_AVG: number }
+
+export interface ProdSnapshot {
+  pickers_today:            ProdRow[]
+  pickers_month:            ProdMonthRow[]
+  packers_today:            ProdRow[]
+  packers_month:            ProdMonthRow[]
+  operators_today?:         ProdRow[]
+  operators_month?:         ProdMonthRow[]
+  team_avg_pickers_today:   number | null
+  team_avg_pickers_month:   number | null
+  team_avg_packers_today:   number | null
+  team_avg_packers_month:   number | null
+  team_avg_operators_today?: number | null
+  team_avg_operators_month?: number | null
+}
+
+export interface EmployeeMetrics {
+  employee:          Employee
+  todayUPH:         number | null
+  monthUPH:         number | null
+  hoursToday:       number | null
+  ordersToday:      number | null
+  ordersMonth:      number | null
+  trend:            number | null   // % change today vs month avg
+  consistencyScore: number          // 0-100
+  impactScore:      number          // 0-100
+  impactLabel:      string
+  rating:           string
+  ratingStars:      number
+  ratingColor:      string
+  teamAvgToday:     number | null
+  vsTeamToday:      number | null   // % vs team avg today
+  vsTeamMonth:      number | null
+  hasData:          boolean
+}
+
+// ── Name Matching ─────────────────────────────────────────────────────────────
+export function normGreek(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
+}
+export function nameMatch(empName: string, oracleNoma: string): boolean {
+  const parts = oracleNoma.trim().split(/\s+/)
+  const surname = parts[parts.length - 1]
+  return surname.length > 3 && normGreek(empName).includes(normGreek(surname))
+}
+
+// ── Rating ────────────────────────────────────────────────────────────────────
+export function getRating(score: number): { label: string; stars: number; color: string } {
+  if (score >= 80) return { label: 'Elite',       stars: 5, color: '#f59e0b' }
+  if (score >= 65) return { label: 'Advanced',    stars: 4, color: '#3b82f6' }
+  if (score >= 50) return { label: 'Independent', stars: 3, color: '#22c55e' }
+  if (score >= 35) return { label: 'Developing',  stars: 2, color: '#94a3b8' }
+  return                   { label: 'Training',   stars: 1, color: '#ef4444' }
+}
+
+export function getImpactLabel(score: number): string {
+  if (score >= 95) return 'Critical Asset'
+  if (score >= 85) return 'High Impact'
+  if (score >= 70) return 'Valuable Contributor'
+  if (score >= 50) return 'Standard Contributor'
+  return 'Developing'
+}
+
+// ── Compute Per-Employee Metrics ──────────────────────────────────────────────
+export function computeMetrics(emp: Employee, snap: ProdSnapshot | null): EmployeeMetrics {
+  const isPicker   = emp.primary_role === 'picker'   || emp.secondary_role === 'picker'
+  const isPacker   = emp.primary_role === 'packer'   || emp.secondary_role === 'packer'
+  const isOperator = !isPicker && !isPacker &&
+    (emp.primary_role === 'operator' || emp.secondary_role === 'operator')
+
+  const todayRows = isPicker   ? snap?.pickers_today
+    : isPacker   ? snap?.packers_today
+    : isOperator ? snap?.operators_today
+    : undefined
+  const monthRows = isPicker   ? snap?.pickers_month
+    : isPacker   ? snap?.packers_month
+    : isOperator ? snap?.operators_month
+    : undefined
+  const teamAvgToday = isPicker   ? (snap?.team_avg_pickers_today  ?? null)
+    : isPacker   ? (snap?.team_avg_packers_today  ?? null)
+    : isOperator ? (snap?.team_avg_operators_today ?? null)
+    : null
+  const teamAvgMonth = isPicker   ? (snap?.team_avg_pickers_month  ?? null)
+    : isPacker   ? (snap?.team_avg_packers_month  ?? null)
+    : isOperator ? (snap?.team_avg_operators_month ?? null)
+    : null
+
+  const todayRow = todayRows?.find(r => nameMatch(emp.full_name, r.ONOMA)) ?? null
+  const monthRow = monthRows?.find(r => nameMatch(emp.full_name, r.ONOMA)) ?? null
+
+  const todayUPH    = (todayRow?.UPH != null && todayRow.UPH > 0) ? todayRow.UPH : null
+  const monthUPH    = (monthRow?.UPH_AVG != null && monthRow.UPH_AVG > 0) ? monthRow.UPH_AVG : null
+  const hoursToday  = todayRow?.ORES   ?? null
+  const ordersToday = (todayRow?.ORDERS != null && todayRow.ORDERS > 0) ? todayRow.ORDERS : null
+  const ordersMonth = monthRow?.ORDERS_AVG ?? null
+  const hasData     = todayUPH !== null || monthUPH !== null
+
+  const trend = (todayUPH && monthUPH && monthUPH > 0)
+    ? Math.round(((todayUPH - monthUPH) / monthUPH) * 100) : null
+
+  const consistencyScore = (todayUPH && monthUPH)
+    ? Math.max(0, Math.min(100, Math.round(100 - Math.abs((todayUPH - monthUPH) / monthUPH) * 100)))
+    : Math.round((parseInt(emp.skill_level) / 5) * 55 + 25)
+
+  // Impact score (0–100): UPH + Orders volume + Hours + Trend + Flexibility
+  const uphComp    = monthUPH    ? Math.min(35, (monthUPH    / 180) * 35) : 0
+  const ordComp    = ordersMonth ? Math.min(20, (ordersMonth / 600) * 20) : 0
+  const hrsComp    = hoursToday  ? Math.min(15, (hoursToday  / 8)   * 15) : 0
+  const trendComp  = trend != null ? Math.max(0, Math.min(15, 7.5 + trend * 0.35)) : 7
+  const flexComp   = ((emp.flexibility ?? 1) / 5) * 15
+  const impactScore = Math.min(100, Math.round(uphComp + ordComp + hrsComp + trendComp + flexComp))
+
+  const { label: rating, stars: ratingStars, color: ratingColor } = getRating(impactScore)
+  const impactLabel = getImpactLabel(impactScore)
+
+  const vsTeamToday = (todayUPH && teamAvgToday && teamAvgToday > 0)
+    ? Math.round(((todayUPH - teamAvgToday) / teamAvgToday) * 100) : null
+  const vsTeamMonth = (monthUPH && teamAvgMonth && teamAvgMonth > 0)
+    ? Math.round(((monthUPH - teamAvgMonth) / teamAvgMonth) * 100) : null
+
+  return {
+    employee: emp, todayUPH, monthUPH, hoursToday, ordersToday, ordersMonth,
+    trend, consistencyScore, impactScore, impactLabel,
+    rating, ratingStars, ratingColor,
+    teamAvgToday, vsTeamToday, vsTeamMonth, hasData,
+  }
+}
+
+// ── Main Hook ─────────────────────────────────────────────────────────────────
+export function useProductivityData() {
+  const [prodSnap, setProdSnap] = useState<ProdSnapshot | null>(null)
+  const [loading, setLoading]   = useState(true)
+  const employees                = useAppStore(s => s.employees)
+
+  useEffect(() => {
+    supabase.from('productivity_snapshots')
+      .select('*').order('generated_at', { ascending: false }).limit(1).single()
+      .then(({ data }) => {
+        if (data?.payload) setProdSnap(data.payload as ProdSnapshot)
+        setLoading(false)
+      })
+  }, [])
+
+  const allMetrics = useMemo(
+    () => employees.map(e => computeMetrics(e, prodSnap)),
+    [employees, prodSnap]
+  )
+
+  const withData = useMemo(
+    () => allMetrics.filter(m => m.hasData),
+    [allMetrics]
+  )
+
+  const totalOrdersToday = useMemo(() => {
+    const rows = [
+      ...(prodSnap?.pickers_today   ?? []),
+      ...(prodSnap?.packers_today   ?? []),
+      ...(prodSnap?.operators_today ?? []),
+    ]
+    return rows.reduce((s, r) => s + (r.ORDERS ?? 0), 0)
+  }, [prodSnap])
+
+  const totalHoursToday = useMemo(() => {
+    const rows = [
+      ...(prodSnap?.pickers_today   ?? []),
+      ...(prodSnap?.packers_today   ?? []),
+      ...(prodSnap?.operators_today ?? []),
+    ]
+    return Math.round(rows.reduce((s, r) => s + (r.ORES ?? 0), 0) * 10) / 10
+  }, [prodSnap])
+
+  const meanUPH = useMemo(() => {
+    if (!totalHoursToday || totalHoursToday === 0) return null
+    return Math.round((totalOrdersToday / totalHoursToday) * 10) / 10
+  }, [totalOrdersToday, totalHoursToday])
+
+  return {
+    prodSnap, employees, loading,
+    allMetrics, withData,
+    totalOrdersToday, totalHoursToday, meanUPH,
+  }
+}
