@@ -101,11 +101,12 @@ export function RoleRankingPage() {
   const avgUPH    = withUPH.length ? withUPH.reduce((s, m) => s + (m.todayUPH ?? 0), 0) / withUPH.length : null
   const totalOrders = roleMetrics.reduce((s, m) => s + (m.ordersToday ?? 0), 0)
 
+  const activeToday = withUPH.length
   const kpis = [
-    { label: 'Εργαζόμενοι',       value: employees.filter(e => e.primary_role === activeRole).length, icon: <Users className="w-4 h-4" /> },
-    { label: 'Μέσο Orders/Hour',   value: avgUPH?.toFixed(1) ?? '—', icon: <Zap className="w-4 h-4" /> },
-    { label: 'Καλύτερος',         value: ranked[0]?.employee.full_name?.split(' ')[0] ?? '—', icon: '🥇' },
-    { label: 'Σύνολο Παραγγελιών', value: totalOrders.toLocaleString('el-GR'), icon: <BarChart2 className="w-4 h-4" /> },
+    { label: 'Εργαζόμενοι',            value: `${activeToday} / ${employees.filter(e => e.primary_role === activeRole).length}`, icon: <Users className="w-4 h-4" />, sub: 'ενεργοί σήμερα' },
+    { label: 'ΜΟ Ομάδας Σήμερα',       value: avgUPH?.toFixed(1) ?? '—', icon: <Zap className="w-4 h-4" />, sub: 'Orders/Hour' },
+    { label: 'Καλύτερος Σήμερα',       value: ranked[0]?.employee.full_name?.split(' ')[0] ?? '—', icon: '🥇', sub: ranked[0]?.todayUPH ? `${ranked[0].todayUPH.toFixed(1)} UPH` : '' },
+    { label: 'Σύνολο Παραγγελιών',     value: totalOrders.toLocaleString('el-GR'), icon: <BarChart2 className="w-4 h-4" />, sub: 'σήμερα' },
   ]
 
   const barData = withUPH.slice(0, 10).map(m => ({
@@ -125,7 +126,7 @@ export function RoleRankingPage() {
           </button>
           <div>
             <h1 className="text-xl font-bold text-slate-800">Ranking ανά Ρόλο</h1>
-            <p className="text-xs text-slate-400">Κατάταξη εργαζομένων ανά ρόλο</p>
+            <p className="text-xs text-slate-400">Παραγωγικότητα σήμερα · σύγκριση με ΜΟ 30 ημερών</p>
           </div>
         </div>
       </div>
@@ -159,7 +160,8 @@ export function RoleRankingPage() {
                 {typeof k.icon === 'string' ? <span className="text-lg">{k.icon}</span> : k.icon}
               </div>
               <div className="text-xl font-bold text-slate-800">{k.value}</div>
-              <div className="text-xs text-slate-400 mt-0.5">{k.label}</div>
+              <div className="text-xs text-slate-500 mt-0.5 font-medium">{k.label}</div>
+              {k.sub && <div className="text-[10px] text-slate-400">{k.sub}</div>}
             </div>
           ))}
         </div>
@@ -222,8 +224,18 @@ export function RoleRankingPage() {
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 border-b border-slate-100">
                   <tr>
-                    {['Rank', 'Εργαζόμενος', 'UPH', 'Παραγγελίες', 'Ώρες', 'Trend', 'Impact', 'Rating'].map(h => (
-                      <th key={h} className="px-4 py-2.5 text-left text-[10px] tracking-wider text-slate-400 uppercase whitespace-nowrap font-medium">
+                    {[
+                      { h: 'Rank', tip: '' },
+                      { h: 'Εργαζόμενος', tip: '' },
+                      { h: 'UPH Σήμερα', tip: 'Orders/Hour σήμερα' },
+                      { h: 'vs Ομάδα', tip: '% διαφορά από ΜΟ ομάδας σήμερα' },
+                      { h: 'Παραγγελίες', tip: '' },
+                      { h: 'Ώρες', tip: '' },
+                      { h: 'Trend', tip: '% vs ΜΟ 30 ημερών' },
+                      { h: 'Impact', tip: '' },
+                      { h: 'Rating', tip: '' },
+                    ].map(({ h, tip }) => (
+                      <th key={h} title={tip} className="px-4 py-2.5 text-left text-[10px] tracking-wider text-slate-400 uppercase whitespace-nowrap font-medium">
                         {h}
                       </th>
                     ))}
@@ -231,11 +243,12 @@ export function RoleRankingPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {ranked.map((m, i) => {
-                    const { label, stars, color } = getRating(m.impactScore)
+                    const { stars, color } = getRating(m.impactScore)
+                    const noData = m.todayUPH == null
                     return (
-                      <tr key={m.employee.id} className="hover:bg-slate-50/80 transition-colors">
+                      <tr key={m.employee.id} className={cn('hover:bg-slate-50/80 transition-colors', noData && 'opacity-50')}>
                         <td className="px-4 py-2.5 text-center text-sm">
-                          {i < 3 ? MEDALS[i] : <span className="text-xs text-slate-400 font-mono">{i + 1}</span>}
+                          {!noData && i < 3 ? MEDALS[i] : <span className="text-xs text-slate-400 font-mono">{i + 1}</span>}
                         </td>
                         <td className="px-4 py-2.5">
                           <div className="flex items-center gap-2">
@@ -243,11 +256,25 @@ export function RoleRankingPage() {
                               className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0"
                               style={{ background: `${roleConfig.color}18`, color: roleConfig.color }}
                             >{initials(m.employee.full_name)}</div>
-                            <span className="text-xs font-medium text-slate-700 truncate">{m.employee.full_name}</span>
+                            <div>
+                              <div className="text-xs font-medium text-slate-700">{m.employee.full_name}</div>
+                              {noData && <div className="text-[9px] text-slate-400">Δεν εργάστηκε σήμερα</div>}
+                            </div>
                           </div>
                         </td>
-                        <td className="px-4 py-2.5 font-mono text-xs font-bold" style={{ color: roleConfig.color }}>
+                        <td className="px-4 py-2.5 font-mono text-xs font-bold" style={{ color: noData ? '#cbd5e1' : roleConfig.color }}>
                           {fmtUPH(m.todayUPH)}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {m.vsTeamToday != null ? (
+                            <span className={cn('text-xs font-semibold px-1.5 py-0.5 rounded-md',
+                              m.vsTeamToday >= 10 ? 'bg-emerald-50 text-emerald-600'
+                              : m.vsTeamToday <= -10 ? 'bg-red-50 text-red-500'
+                              : 'bg-slate-100 text-slate-500'
+                            )}>
+                              {m.vsTeamToday > 0 ? '+' : ''}{m.vsTeamToday}%
+                            </span>
+                          ) : <span className="text-slate-300 text-xs">—</span>}
                         </td>
                         <td className="px-4 py-2.5 text-xs text-slate-500 font-mono">{m.ordersToday ?? '—'}</td>
                         <td className="px-4 py-2.5 text-xs text-slate-500">{m.hoursToday ? `${m.hoursToday.toFixed(1)}h` : '—'}</td>
@@ -271,7 +298,7 @@ export function RoleRankingPage() {
                     )
                   })}
                   {ranked.length === 0 && (
-                    <tr><td colSpan={8} className="py-10 text-center text-slate-400 text-sm">Δεν υπάρχουν δεδομένα</td></tr>
+                    <tr><td colSpan={9} className="py-10 text-center text-slate-400 text-sm">Δεν υπάρχουν δεδομένα</td></tr>
                   )}
                 </tbody>
               </table>
