@@ -117,8 +117,8 @@ function EmployeeDetailPanel({
   const empShifts = weekShifts?.[emp.id] ?? null
   const cfg       = STATUS_CONFIG[emp.current_status]
 
-  const isPicker = emp.primary_role === 'picker'
-  const isPacker = emp.primary_role === 'packer'
+  const isPicker = emp.primary_role === 'picker' || emp.secondary_role === 'picker'
+  const isPacker = emp.primary_role === 'packer' || emp.secondary_role === 'packer'
 
   const todayRows = isPicker ? prodSnap?.pickers_today : isPacker ? prodSnap?.packers_today : []
   const monthRows = isPicker ? prodSnap?.pickers_month : isPacker ? prodSnap?.packers_month : []
