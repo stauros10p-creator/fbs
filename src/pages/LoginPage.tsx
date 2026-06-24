@@ -4,9 +4,10 @@ import { useState, FormEvent } from 'react'
 
 // ── Credentials — αλλαγή εδώ για νέους χρήστες ──────────────────────────────
 const USERS: Record<string, { password: string; displayName: string }> = {
-  admin:     { password: 'aberon2024',  displayName: 'Administrator' },
-  stavros:   { password: 'stavros123',  displayName: 'Σταύρος' },
-  supervisor:{ password: 'super2024',   displayName: 'Supervisor' },
+  span: { password: '1414', displayName: 'Span' },
+  akar: { password: '1212', displayName: 'Akar' },
+  mkar: { password: '1313', displayName: 'Mkar' },
+  gpav: { password: '1515', displayName: 'Gpav' },
 }
 
 export const AUTH_KEY = 'wh_auth_user'
