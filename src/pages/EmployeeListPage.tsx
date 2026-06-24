@@ -58,13 +58,14 @@ interface EmpStats {
   validDays:   DayRow[]
 }
 
-function computeStats(emp: Employee, metrics: any, prodSnap: any): EmpStats {
-  const target = ROLE_TARGETS[emp.primary_role] ?? 70
+function computeStats(emp: Employee, metrics: any, prodSnap: any, overrideRole?: string): EmpStats {
+  const role   = overrideRole ?? emp.primary_role
+  const target = ROLE_TARGETS[role] ?? 70
 
   const roleArr: DayRow[] | undefined =
-    emp.primary_role === 'operator' ? prodSnap?.operators_days :
-    emp.primary_role === 'packer'   ? prodSnap?.packers_days   :
-    emp.primary_role === 'picker'   ? prodSnap?.pickers_days   :
+    role === 'operator' ? prodSnap?.operators_days :
+    role === 'packer'   ? prodSnap?.packers_days   :
+    role === 'picker'   ? prodSnap?.pickers_days   :
     undefined
 
   const oracleName = (emp as any).oracle_name as string | null | undefined
@@ -561,19 +562,29 @@ export function EmployeeListPage() {
     return map
   }, [employees, allMetrics, prodSnap])
 
-  // Build group info
+  // Build group info — include primary, secondary AND tertiary role matches
   const groupInfos: GroupInfo[] = useMemo(() =>
     ROLE_GROUPS.map(g => {
-      const emps     = employees.filter(e => g.roles.includes(e.primary_role))
+      const groupRole = g.roles[0]
+      // employee appears in this group if any of their roles matches
+      const emps = employees.filter(e =>
+        g.roles.some(r =>
+          r === e.primary_role ||
+          r === (e as any).secondary_role ||
+          r === (e as any).tertiary_role
+        )
+      )
+      // compute stats using this group's role data (not necessarily primary role)
+      const metrics = (e: Employee) => allMetrics.find(m => m.employee.id === e.id)
       const withData = emps
-        .map(e => ({ emp: e, stats: empStatMap.get(e.id)! }))
+        .map(e => ({ emp: e, stats: computeStats(e, metrics(e), prodSnap, groupRole) }))
         .filter(x => x.stats.liveUPH != null)
 
       const avgUPH = withData.length > 0
         ? Math.round(withData.reduce((s, x) => s + (x.stats.liveUPH ?? 0), 0) / withData.length)
         : null
-      const target  = ROLE_TARGETS[g.roles[0]] ?? 70
-      const gapPct  = avgUPH != null
+      const target = ROLE_TARGETS[groupRole] ?? 70
+      const gapPct = avgUPH != null
         ? Math.round(((avgUPH - target) / target) * 100) : null
 
       return {
@@ -585,7 +596,7 @@ export function EmployeeListPage() {
         noData: emps.length - withData.length,
       }
     }),
-    [employees, empStatMap]
+    [employees, allMetrics, prodSnap]
   )
 
   const allWithStats = useMemo(() =>
@@ -688,7 +699,15 @@ export function EmployeeListPage() {
         <div className="flex-1 overflow-y-auto">
           {groupInfos.map(g => {
             const isCollapsed = !!collapsed[g.label]
-            const visible     = g.employees.filter(e => filteredIds.has(e.id))
+            // show all members; apply search filter; status filter uses group-specific stats
+            const allMembers = [...g.withData, ...g.employees
+              .filter(e => !g.withData.some(x => x.emp.id === e.id))
+              .map(e => ({ emp: e, stats: empStatMap.get(e.id)! }))]
+            const visible = allMembers.filter(({ emp, stats }) => {
+              const matchSearch = !search || emp.full_name.toLowerCase().includes(search.toLowerCase())
+              const matchFilter = filter === 'all' || (stats?.status ?? 'none') === filter
+              return matchSearch && matchFilter
+            })
             if (filter !== 'all' && visible.length === 0) return null
 
             return (
@@ -716,19 +735,15 @@ export function EmployeeListPage() {
                             Κανένας εργαζόμενος αντιστοιχεί στο φίλτρο
                           </td>
                         </tr>
-                      ) : visible.map(emp => {
-                        const stats = empStatMap.get(emp.id)
-                        if (!stats) return null
-                        return (
-                          <EmpRow
-                            key={emp.id}
-                            emp={emp}
-                            stats={stats}
-                            isSelected={selectedEmp?.id === emp.id}
-                            onClick={() => setSelectedEmp(prev => prev?.id === emp.id ? null : emp)}
-                          />
-                        )
-                      })}
+                      ) : visible.map(({ emp, stats }) => (
+                        <EmpRow
+                          key={emp.id}
+                          emp={emp}
+                          stats={stats}
+                          isSelected={selectedEmp?.id === emp.id}
+                          onClick={() => setSelectedEmp(prev => prev?.id === emp.id ? null : emp)}
+                        />
+                      ))}
                     </tbody>
                   </table>
                 )}
