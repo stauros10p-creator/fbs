@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from '@/components/layout/Layout'
 import { DataLoader } from '@/components/layout/DataLoader'
@@ -16,8 +17,15 @@ import { OpsInboundPage } from '@/pages/OpsInboundPage'
 import { CopilotPage } from '@/pages/CopilotPage'
 import { StaffPlanPage } from '@/pages/StaffPlanPage'
 import { HourlyForecastPage } from '@/pages/HourlyForecastPage'
+import { LoginPage, getAuthUser } from '@/pages/LoginPage'
 
 export default function App() {
+  const [authed, setAuthed] = useState(() => getAuthUser() !== null)
+
+  if (!authed) {
+    return <LoginPage onLogin={() => setAuthed(true)} />
+  }
+
   return (
     <BrowserRouter>
       <DataLoader>
