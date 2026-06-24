@@ -609,7 +609,7 @@ export function EmployeeListPage() {
         above:  withData.filter(x => x.stats.status === 'above').length,
         near:   withData.filter(x => x.stats.status === 'near').length,
         below:  withData.filter(x => x.stats.status === 'below').length,
-        noData: emps.length - withData.length,
+        noData: emps.filter(e => e.primary_role === groupRole).length - withData.filter(x => x.emp.primary_role === groupRole).length,
       }
     }),
     [employees, allMetrics, prodSnap]
@@ -715,11 +715,8 @@ export function EmployeeListPage() {
         <div className="flex-1 overflow-y-auto">
           {groupInfos.map(g => {
             const isCollapsed = !!collapsed[g.label]
-            // show all members; apply search filter; status filter uses group-specific stats
-            const allMembers = [...g.withData, ...g.employees
-              .filter(e => !g.withData.some(x => x.emp.id === e.id))
-              .map(e => ({ emp: e, stats: empStatMap.get(e.id)! }))]
-            const visible = allMembers.filter(({ emp, stats }) => {
+            // only show employees who have actual data for this group's role
+            const visible = g.withData.filter(({ emp, stats }) => {
               const matchSearch = !search || emp.full_name.toLowerCase().includes(search.toLowerCase())
               const matchFilter = filter === 'all' || (stats?.status ?? 'none') === filter
               return matchSearch && matchFilter
