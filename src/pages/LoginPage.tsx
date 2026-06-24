@@ -24,7 +24,7 @@ export function logout() {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-export function LoginPage({ onLogin }: { onLogin: () => void }) {
+export function LoginPage({ onLogin }: { onLogin?: () => void }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error,    setError]    = useState('')
@@ -42,7 +42,8 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
           username: username.trim().toLowerCase(),
           displayName: user.displayName,
         }))
-        onLogin()
+        if (onLogin) onLogin()
+        else window.location.reload()
       } else {
         setError('Λάθος όνομα χρήστη ή κωδικός.')
         setLoading(false)
