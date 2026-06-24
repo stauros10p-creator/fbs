@@ -101,16 +101,19 @@ export function EmployeeDetailPage() {
               : undefined
     return (arr ?? []).filter(r =>
       nameMatch(employee?.full_name ?? '', r.ONOMA) &&
-      r.DAY >= startDate && r.DAY <= endDate
+      r.DAY >= startDate && r.DAY <= endDate &&
+      // exclude short/insignificant sessions
+      (r.ORES >= 3 || r.ORDERS > 100)
     ).sort((a, b) => a.DAY.localeCompare(b.DAY))
   }, [prodSnap, selectedRole, employee, startDate, endDate])
 
   // ── Daily table data with "vs previous day" ───────────────────────────────
   const tableRows = useMemo(() => {
     return roleDaysSource.map((r, i) => {
-      const prevOrders = i > 0 ? roleDaysSource[i - 1].ORDERS : null
-      const vsPrev = (prevOrders != null && prevOrders > 0 && r.ORDERS != null)
-        ? Math.round(((r.ORDERS - prevOrders) / prevOrders) * 100) : null
+      const prevUPH = i > 0 ? roleDaysSource[i - 1].UPH : null
+      // compare UPH (rate), not raw orders — avoids volume-driven swings
+      const vsPrev = (prevUPH != null && prevUPH > 0 && r.UPH != null)
+        ? Math.round(((r.UPH - prevUPH) / prevUPH) * 100) : null
       return { ...r, vsPrev }
     }).reverse() // newest first in display
   }, [roleDaysSource])
