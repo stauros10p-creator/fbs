@@ -135,10 +135,12 @@ export function computeMetrics(emp: Employee, snap: ProdSnapshot | null, maxUPH 
     : isOperator ? (snap?.team_avg_operators_month ?? null)
     : null
 
-  const todayUPH    = (todayRow?.UPH != null && todayRow.UPH > 0) ? todayRow.UPH : null
-  const monthUPH    = (monthRow as any)?.UPH_AVG > 0 ? (monthRow as any).UPH_AVG : null
   const hoursToday  = todayRow?.ORES   ?? null
   const ordersToday = (todayRow?.ORDERS != null && todayRow.ORDERS > 0) ? todayRow.ORDERS : null
+  // Only count today's session if ≥ 180 min OR > 100 orders (avoids inflated UPH from short sessions)
+  const validSession = (hoursToday != null && hoursToday >= 3) || (ordersToday != null && ordersToday > 100)
+  const todayUPH    = (todayRow?.UPH != null && todayRow.UPH > 0 && validSession) ? todayRow.UPH : null
+  const monthUPH    = (monthRow as any)?.UPH_AVG > 0 ? (monthRow as any).UPH_AVG : null
   const ordersMonth = (monthRow as any)?.ORDERS_AVG ?? null
   const hasData     = todayUPH !== null || monthUPH !== null
 
