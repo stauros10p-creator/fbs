@@ -102,8 +102,8 @@ export function EmployeeDetailPage() {
     return (arr ?? []).filter(r =>
       nameMatch(employee?.full_name ?? '', r.ONOMA) &&
       r.DAY >= startDate && r.DAY <= endDate &&
-      // exclude short/insignificant sessions
-      (r.ORES >= 3 || r.ORDERS > 100)
+      // exclude short/insignificant sessions and Oracle 24h artifacts
+      (r.ORES >= 3 && r.ORDERS > 100 && r.ORES < 20)
     ).sort((a, b) => a.DAY.localeCompare(b.DAY))
   }, [prodSnap, selectedRole, employee, startDate, endDate])
 
