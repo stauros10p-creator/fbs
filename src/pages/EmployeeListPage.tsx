@@ -67,8 +67,9 @@ function computeStats(emp: Employee, metrics: any, prodSnap: any): EmpStats {
     emp.primary_role === 'picker'   ? prodSnap?.pickers_days   :
     undefined
 
+  const oracleName = (emp as any).oracle_name as string | null | undefined
   const validDays: DayRow[] = (roleArr ?? [])
-    .filter((r: DayRow) => nameMatch(emp.full_name, r.ONOMA, emp.oracle_name) && isValidDay(r))
+    .filter((r: DayRow) => nameMatch(emp.full_name, r.ONOMA, oracleName) && isValidDay(r))
     .sort((a: DayRow, b: DayRow) => a.DAY.localeCompare(b.DAY))
 
   const todayUPH = metrics?.todayUPH ?? null
