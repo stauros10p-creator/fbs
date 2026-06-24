@@ -1,31 +1,12 @@
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
-import { LoginPage } from '@/pages/LoginPage'
+import { useState } from 'react'
+import { LoginPage, getAuthUser } from '@/pages/LoginPage'
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
-  const [checked, setChecked] = useState(false)
-  const [session, setSession] = useState<any>(null)
+  const [authed, setAuthed] = useState(() => getAuthUser() !== null)
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session)
-      setChecked(true)
-    })
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-    })
-    return () => listener.subscription.unsubscribe()
-  }, [])
-
-  if (!checked) {
-    return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="text-white/40 text-sm">Loading...</div>
-      </div>
-    )
+  if (!authed) {
+    return <LoginPage onLogin={() => setAuthed(true)} />
   }
-
-  if (!session) return <LoginPage />
 
   return <>{children}</>
 }
