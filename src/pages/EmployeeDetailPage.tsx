@@ -72,15 +72,15 @@ export function EmployeeDetailPage() {
   }
 
   // ── Detect which roles this employee has data for ─────────────────────────
+  // Check _days, _today AND _month — a role tab appears if data exists in any of them
   const availableRoles = useMemo(() => {
     if (!employee || !prodSnap) return []
     const roles: string[] = []
-    const check = (arr: DayRow[] | undefined, role: string) => {
-      if (arr?.some(r => nameMatch(employee.full_name, r.ONOMA))) roles.push(role)
-    }
-    check(prodSnap.pickers_days,   'picker')
-    check(prodSnap.packers_days,   'packer')
-    check(prodSnap.operators_days, 'operator')
+    const hasName = (arr: any[] | undefined) =>
+      arr?.some(r => nameMatch(employee.full_name, r.ONOMA)) ?? false
+    if (hasName(prodSnap.pickers_days)   || hasName(prodSnap.pickers_today)   || hasName(prodSnap.pickers_month))   roles.push('picker')
+    if (hasName(prodSnap.packers_days)   || hasName(prodSnap.packers_today)   || hasName(prodSnap.packers_month))   roles.push('packer')
+    if (hasName(prodSnap.operators_days) || hasName(prodSnap.operators_today) || hasName(prodSnap.operators_month)) roles.push('operator')
     return roles
   }, [employee, prodSnap])
 
