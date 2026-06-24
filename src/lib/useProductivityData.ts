@@ -137,8 +137,9 @@ export function computeMetrics(emp: Employee, snap: ProdSnapshot | null, maxUPH 
 
   const hoursToday  = todayRow?.ORES   ?? null
   const ordersToday = (todayRow?.ORDERS != null && todayRow.ORDERS > 0) ? todayRow.ORDERS : null
-  // Only count today's session if ≥ 180 min OR > 100 orders (avoids inflated UPH from short sessions)
-  const validSession = (hoursToday != null && hoursToday >= 3) || (ordersToday != null && ordersToday > 100)
+  // Valid session: ≥ 3h AND > 100 orders AND < 20h (filters noise + Oracle 24h artifacts)
+  const validSession = hoursToday != null && ordersToday != null
+    && hoursToday >= 3 && hoursToday < 20 && ordersToday > 100
   const todayUPH    = (todayRow?.UPH != null && todayRow.UPH > 0 && validSession) ? todayRow.UPH : null
   const monthUPH    = (monthRow as any)?.UPH_AVG > 0 ? (monthRow as any).UPH_AVG : null
   const ordersMonth = (monthRow as any)?.ORDERS_AVG ?? null
