@@ -147,9 +147,9 @@ function EmployeeCard({ m, rank, days, onClick }: {
         <ImpactRing score={m.impactScore} size={52} />
         <div className="text-right space-y-1">
           <div>
-            <p className="text-[10px] text-slate-400">Orders/Hour</p>
+            <p className="text-[10px] text-slate-400">Μ.Ο. μήνα</p>
             <p className="text-lg font-bold font-mono" style={{ color: rc?.color }}>
-              {m.todayUPH?.toFixed(1) ?? '—'}
+              {m.monthUPH?.toFixed(1) ?? '—'}
             </p>
           </div>
           <TrendBadge trend={m.trend} />
@@ -295,9 +295,9 @@ function Top10({ sorted }: { sorted: EmployeeMetrics[] }) {
               <ImpactRing score={m.impactScore} size={44} />
               <div className="text-right min-w-[60px]">
                 <p className="text-sm font-bold font-mono" style={{ color: rc?.color }}>
-                  {m.todayUPH?.toFixed(1) ?? '—'}
+                  {m.monthUPH?.toFixed(1) ?? '—'}
                 </p>
-                <p className="text-[10px] text-slate-400">o/h</p>
+                <p className="text-[10px] text-slate-400">μ.ο. μήνα</p>
               </div>
               <TrendBadge trend={m.trend} />
             </div>
@@ -336,8 +336,8 @@ function MostImproved({ all }: { all: EmployeeMetrics[] }) {
                 <TrendingUp className="w-4 h-4" />+{m.trend}%
               </div>
               <div className="text-right">
-                <p className="text-xs font-mono text-slate-600">{m.todayUPH?.toFixed(1)} o/h</p>
-                <p className="text-[10px] text-slate-400">vs {m.monthUPH?.toFixed(1)} avg</p>
+                <p className="text-xs font-mono text-slate-600">{m.monthUPH?.toFixed(1)} o/h</p>
+                <p className="text-[10px] text-slate-400">μ.ο. μήνα</p>
               </div>
             </div>
           )
@@ -404,7 +404,7 @@ export function EmployeeListPage() {
       switch (sort) {
         case 'name':    return asc ? a.employee.full_name.localeCompare(b.employee.full_name)
                                    : b.employee.full_name.localeCompare(a.employee.full_name)
-        case 'uph':    va = a.todayUPH ?? -1;     vb = b.todayUPH ?? -1; break
+        case 'uph':    va = a.monthUPH ?? -1;     vb = b.monthUPH ?? -1; break
         case 'orders': va = a.ordersToday ?? -1;  vb = b.ordersToday ?? -1; break
         case 'trend':  va = a.trend ?? -999;       vb = b.trend ?? -999; break
         case 'flex':   va = a.flexibilityRoles;    vb = b.flexibilityRoles; break
@@ -630,12 +630,17 @@ export function EmployeeListPage() {
                               </span>
                             </div>
                           </td>
-                          {/* UPH */}
+                          {/* UPH — 30-day avg */}
                           <td className="px-4 py-3.5 text-center">
-                            <span className="text-sm font-bold font-mono"
-                              style={{ color: m.hasData ? rc?.color : '#cbd5e1' }}>
-                              {m.todayUPH?.toFixed(1) ?? '—'}
-                            </span>
+                            <div>
+                              <span className="text-sm font-bold font-mono"
+                                style={{ color: m.monthUPH ? rc?.color : '#cbd5e1' }}>
+                                {m.monthUPH?.toFixed(1) ?? '—'}
+                              </span>
+                              {m.monthUPH && (
+                                <p className="text-[10px] text-slate-400">μ.ο. μήνα</p>
+                              )}
+                            </div>
                           </td>
                           {/* Orders */}
                           <td className="px-4 py-3.5 text-center">
