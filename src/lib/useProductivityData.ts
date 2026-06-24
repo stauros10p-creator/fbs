@@ -70,11 +70,20 @@ export const OPERATOR_CODES: Record<string, string> = {
 export function normGreek(s: string): string {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 }
-export function nameMatch(empName: string, oracleNoma: string): boolean {
+
+// oracleName: pass emp.oracle_name to do exact matching instead of fuzzy surname.
+// Eliminates false positives when two employees share the same surname.
+export function nameMatch(empName: string, oracleNoma: string, oracleName?: string | null): boolean {
+  // 1. Exact match via stored oracle_name field (highest priority)
+  if (oracleName) {
+    return normGreek(oracleNoma) === normGreek(oracleName)
+  }
+  // 2. AutoStore operator code lookup (undef14 codes like "gkok", "pgog" etc.)
   const code = oracleNoma.trim().toLowerCase()
   if (OPERATOR_CODES[code]) {
     return normGreek(empName).includes(normGreek(OPERATOR_CODES[code]))
   }
+  // 3. Fuzzy surname fallback: last word of Oracle name treated as surname
   const parts = oracleNoma.trim().split(/\s+/)
   const surname = parts[parts.length - 1]
   return surname.length > 3 && normGreek(empName).includes(normGreek(surname))
@@ -119,8 +128,8 @@ export function computeMetrics(emp: Employee, snap: ProdSnapshot | null, maxUPH 
     ...(snap?.operators_month ?? []),
   ]
 
-  const todayRow = allTodayRows.find(r => nameMatch(emp.full_name, r.ONOMA)) ?? null
-  const monthRow = allMonthRows.find(r => nameMatch(emp.full_name, r.ONOMA)) ?? null
+  const todayRow = allTodayRows.find(r => nameMatch(emp.full_name, r.ONOMA, emp.oracle_name)) ?? null
+  const monthRow = allMonthRows.find(r => nameMatch(emp.full_name, r.ONOMA, emp.oracle_name)) ?? null
 
   // For team avg, still use primary role
   const isPicker   = emp.primary_role === 'picker'
@@ -139,7 +148,7 @@ export function computeMetrics(emp: Employee, snap: ProdSnapshot | null, maxUPH 
   const ordersToday = (todayRow?.ORDERS != null && todayRow.ORDERS > 0) ? todayRow.ORDERS : null
   // Valid session: ≥ 3h AND > 100 orders AND < 20h (filters noise + Oracle 24h artifacts)
   const validSession = hoursToday != null && ordersToday != null
-    && hoursToday >= 3 && hoursToday < 20 && ordersToday > 100
+    && hoursToday >= 3 && hoursToday < 13 && ordersToday > 100
   const todayUPH    = (todayRow?.UPH != null && todayRow.UPH > 0 && validSession) ? todayRow.UPH : null
   const monthUPH    = (monthRow as any)?.UPH_AVG > 0 ? (monthRow as any).UPH_AVG : null
   const ordersMonth = (monthRow as any)?.ORDERS_AVG ?? null
@@ -153,9 +162,9 @@ export function computeMetrics(emp: Employee, snap: ProdSnapshot | null, maxUPH 
     : Math.round((parseInt(emp.skill_level) / 5) * 55 + 25)
 
   // ── Flexibility: count roles this employee has been active in ──────────────
-  const inPickers   = [...(snap?.pickers_today   ?? []), ...(snap?.pickers_month   ?? [])].some(r => nameMatch(emp.full_name, r.ONOMA))
-  const inPackers   = [...(snap?.packers_today   ?? []), ...(snap?.packers_month   ?? [])].some(r => nameMatch(emp.full_name, r.ONOMA))
-  const inOperators = [...(snap?.operators_today ?? []), ...(snap?.operators_month ?? [])].some(r => nameMatch(emp.full_name, r.ONOMA))
+  const inPickers   = [...(snap?.pickers_today   ?? []), ...(snap?.pickers_month   ?? [])].some(r => nameMatch(emp.full_name, r.ONOMA, emp.oracle_name))
+  const inPackers   = [...(snap?.packers_today   ?? []), ...(snap?.packers_month   ?? [])].some(r => nameMatch(emp.full_name, r.ONOMA, emp.oracle_name))
+  const inOperators = [...(snap?.operators_today ?? []), ...(snap?.operators_month ?? [])].some(r => nameMatch(emp.full_name, r.ONOMA, emp.oracle_name))
   const flexibilityRoles = [inPickers, inPackers, inOperators].filter(Boolean).length
   const flexibilityScore = Math.round((Math.max(1, flexibilityRoles) / 3) * 100)
 
