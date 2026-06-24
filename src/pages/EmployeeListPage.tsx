@@ -73,10 +73,26 @@ function computeStats(emp: Employee, metrics: any, prodSnap: any, overrideRole?:
     .filter((r: DayRow) => nameMatch(emp.full_name, r.ONOMA, oracleName) && isValidDay(r))
     .sort((a: DayRow, b: DayRow) => a.DAY.localeCompare(b.DAY))
 
-  const todayUPH = metrics?.todayUPH ?? null
-  const monthUPH = metrics?.monthUPH ?? null
-  const liveUPH  = todayUPH ?? monthUPH
-  const isLive   = todayUPH != null
+  // For secondary/tertiary role groups: derive UPH directly from that role's _days data.
+  // Never fall back to metrics (which are primary-role based) — avoids showing operator
+  // UPH inside the packers table just because the employee has secondary_role = 'packer'.
+  const isSecondaryRole = overrideRole != null && overrideRole !== emp.primary_role
+  let todayUPH: number | null
+  let monthUPH: number | null
+
+  if (isSecondaryRole) {
+    // Compute monthly avg from validDays only — if no days, stays null → employee hidden from group
+    monthUPH = validDays.length > 0
+      ? Math.round((validDays.reduce((s, d) => s + (d.UPH ?? 0), 0) / validDays.length) * 10) / 10
+      : null
+    todayUPH = null  // today's role can't be determined from days array alone
+  } else {
+    todayUPH = metrics?.todayUPH ?? null
+    monthUPH = metrics?.monthUPH ?? null
+  }
+
+  const liveUPH = todayUPH ?? monthUPH
+  const isLive  = todayUPH != null
 
   const gap    = liveUPH != null ? Math.round((liveUPH - target) * 10) / 10 : null
   const gapPct = liveUPH != null ? Math.round(((liveUPH - target) / target) * 100) : null
@@ -106,7 +122,7 @@ function computeStats(emp: Employee, metrics: any, prodSnap: any, overrideRole?:
   return {
     liveUPH, isLive, target, gap, gapPct, status,
     achieveDays, totalDays: validDays.length, achievePct,
-    trendPct: metrics?.trend ?? null,
+    trendPct: isSecondaryRole ? null : (metrics?.trend ?? null),
     streakAbove, streakBelow, validDays,
   }
 }
