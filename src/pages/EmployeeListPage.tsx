@@ -1,698 +1,759 @@
-// src/pages/EmployeeListPage.tsx — Full redesign with Impact Score + Rankings
+// src/pages/EmployeeListPage.tsx — Warehouse Shift Management Control Center
 
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAppStore } from '@/store'
 import {
-  ArrowLeft, Search, Grid3X3, List, Users, BarChart2, Package,
-  TrendingUp, TrendingDown, Zap, ChevronDown, ChevronUp, Minus,
+  useProductivityData, nameMatch, type DayRow,
+  impactColor, getImpactLabel, getRating,
+} from '@/lib/useProductivityData'
+import { initials } from '@/lib/utils'
+import {
+  ChevronDown, ChevronUp, X, AlertTriangle, Zap, ExternalLink, Search,
 } from 'lucide-react'
-import { useProductivityData, nameMatch, impactColor } from '@/lib/useProductivityData'
-import type { DayRow, ProdSnapshot, EmployeeMetrics } from '@/lib/useProductivityData'
-import { ROLE_CONFIG } from '@/types'
-import { cn, initials } from '@/lib/utils'
-import { LineChart, Line, ResponsiveContainer } from 'recharts'
+import {
+  BarChart, Bar, Cell, ResponsiveContainer, Tooltip as RTooltip, XAxis,
+} from 'recharts'
+import type { Employee } from '@/types'
 
-// ── Types ──────────────────────────────────────────────────────────────────────
-type SortKey   = 'impact' | 'uph' | 'orders' | 'trend' | 'flex' | 'name'
-type RoleFilter = 'all' | 'picker' | 'packer' | 'operator'
-type ViewMode  = 'list' | 'grid'
-type TabView   = 'list' | 'top10' | 'byRole' | 'improved'
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-function getEmployeeDays(empName: string, snap: ProdSnapshot | null): DayRow[] {
-  return [
-    ...(snap?.pickers_days   ?? []),
-    ...(snap?.packers_days   ?? []),
-    ...(snap?.operators_days ?? []),
-  ].filter(r => nameMatch(empName, r.ONOMA))
-   .sort((a, b) => a.DAY.localeCompare(b.DAY))
+// ── Role targets (orders/hour) ────────────────────────────────────────────────
+const ROLE_TARGETS: Record<string, number> = {
+  operator:   180,
+  packer:      75,
+  picker:      80,
+  palletizer:  50,
+  sorter:      50,
+  validator:   60,
+  transporter: 50,
+  team_leader: 80,
 }
 
-// ── Sub-components ─────────────────────────────────────────────────────────────
-
-function ImpactRing({ score, size = 60 }: { score: number; size?: number }) {
-  const r    = (size - 10) / 2
-  const circ = 2 * Math.PI * r
-  const col  = impactColor(score)
-  return (
-    <svg width={size} height={size} style={{ flexShrink: 0 }}>
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#f1f5f9" strokeWidth={8} />
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={col} strokeWidth={8}
-        strokeDasharray={circ} strokeDashoffset={circ * (1 - score / 100)}
-        strokeLinecap="round" transform={`rotate(-90 ${size/2} ${size/2})`} />
-      <text x={size/2} y={size/2} textAnchor="middle" dominantBaseline="central"
-        fontSize={size >= 60 ? 14 : 11} fontWeight="bold" fill={col}>{score}</text>
-    </svg>
-  )
-}
-
-function Sparkline({ days }: { days: DayRow[] }) {
-  if (days.length < 2) return <span className="text-slate-200 text-xs">—</span>
-  const data  = days.slice(-14).map(d => ({ v: d.UPH ?? 0 }))
-  const isUp  = data[data.length - 1].v >= data[0].v
-  return (
-    <div style={{ width: 72, height: 28 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data}>
-          <Line type="monotone" dataKey="v" stroke={isUp ? '#22c55e' : '#ef4444'}
-                dot={false} strokeWidth={1.5} />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  )
-}
-
-function FlexDots({ count }: { count: number }) {
-  return (
-    <div className="flex items-center gap-1">
-      {[1, 2, 3].map(i => (
-        <div key={i}
-          className={cn('w-2.5 h-2.5 rounded-full transition-colors', i <= count ? 'bg-indigo-500' : 'bg-slate-200')} />
-      ))}
-      <span className="ml-1 text-xs text-slate-400">{count}/3</span>
-    </div>
-  )
-}
-
-function Stars({ n }: { n: number }) {
-  return (
-    <div className="flex gap-0.5">
-      {[1,2,3,4,5].map(i => (
-        <svg key={i} width={11} height={11} viewBox="0 0 24 24"
-          fill={i <= n ? '#f59e0b' : '#e2e8f0'}>
-          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-        </svg>
-      ))}
-    </div>
-  )
-}
-
-function StatCard({ label, value, sub, icon: Icon, color }: {
-  label: string; value: string | number; sub?: string; icon: any; color: string
-}) {
-  return (
-    <div className="bg-white rounded-2xl p-5 border border-slate-100 flex items-start gap-4 shadow-sm">
-      <div className="p-2.5 rounded-xl" style={{ background: `${color}18` }}>
-        <Icon className="w-5 h-5" style={{ color }} />
-      </div>
-      <div>
-        <p className="text-xs text-slate-400 font-medium uppercase tracking-wide">{label}</p>
-        <p className="text-2xl font-bold text-slate-800 mt-0.5 leading-none">{value}</p>
-        {sub && <p className="text-xs text-emerald-500 font-medium mt-1">{sub}</p>}
-      </div>
-    </div>
-  )
-}
-
-function TrendBadge({ trend }: { trend: number | null }) {
-  if (trend == null) return <span className="text-slate-300 text-xs">—</span>
-  const up = trend >= 0
-  return (
-    <span className={cn('inline-flex items-center gap-0.5 text-xs font-semibold',
-      up ? 'text-emerald-600' : 'text-red-500')}>
-      {up ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-      {trend > 0 ? '+' : ''}{trend}%
-    </span>
-  )
-}
-
-// ── Grid Card ──────────────────────────────────────────────────────────────────
-function EmployeeCard({ m, rank, days, onClick }: {
-  m: EmployeeMetrics; rank: number; days: DayRow[]; onClick: () => void
-}) {
-  const rc = ROLE_CONFIG[m.employee.primary_role]
-  return (
-    <div onClick={onClick}
-      className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all group">
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold"
-            style={{ background: `${rc?.color}18`, color: rc?.color }}>
-            {initials(m.employee.full_name)}
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-slate-800 group-hover:text-slate-900 leading-tight">
-              {m.employee.full_name}
-            </p>
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
-              style={{ background: `${rc?.color}18`, color: rc?.color }}>
-              {rc?.label}
-            </span>
-          </div>
-        </div>
-        <span className="text-[10px] text-slate-400 font-mono">#{rank}</span>
-      </div>
-
-      <div className="flex items-center justify-between">
-        <ImpactRing score={m.impactScore} size={52} />
-        <div className="text-right space-y-1">
-          <div>
-            <p className="text-[10px] text-slate-400">Μ.Ο. μήνα</p>
-            <p className="text-lg font-bold font-mono" style={{ color: rc?.color }}>
-              {m.monthUPH?.toFixed(1) ?? '—'}
-            </p>
-          </div>
-          <TrendBadge trend={m.trend} />
-        </div>
-      </div>
-
-      <div className="mt-3 pt-3 border-t border-slate-50 flex items-center justify-between">
-        <FlexDots count={m.flexibilityRoles} />
-        <Stars n={m.ratingStars} />
-      </div>
-    </div>
-  )
-}
-
-// ── AI Insights ────────────────────────────────────────────────────────────────
-function AIInsights({ sorted }: { sorted: EmployeeMetrics[] }) {
-  const active = sorted.filter(m => m.hasData)
-  if (active.length === 0) return null
-
-  const top      = active[0]
-  const topPct   = Math.round((1 / active.length) * 100)
-  const topRank  = 1
-
-  const mostFlex = [...active].sort((a, b) => b.flexibilityRoles - a.flexibilityRoles)[0]
-  const mostImp  = [...active].filter(m => m.trend != null).sort((a, b) => (b.trend ?? 0) - (a.trend ?? 0))[0]
-  const triRole  = active.filter(m => m.flexibilityRoles === 3).length
-
-  const firstName = (m: EmployeeMetrics) => m.employee.full_name.split(' ')[0]
-
-  const insights = [
-    {
-      icon: '🏆',
-      text: `Ο/Η ${firstName(top)} ανήκει στο Top ${topPct}% των εργαζομένων (Impact Score: ${top.impactScore}/100, #${topRank} στην αποθήκη).`,
-      color: '#f59e0b',
-    },
-    mostFlex.flexibilityRoles >= 2 && {
-      icon: '🔄',
-      text: `Ο/Η ${firstName(mostFlex)} έχει το υψηλότερο Flexibility Score — καλύπτει ${mostFlex.flexibilityRoles} διαφορετικούς ρόλους και είναι ιδανικός/η για critical reallocations.`,
-      color: '#6366f1',
-    },
-    mostImp && (mostImp.trend ?? 0) > 0 && {
-      icon: '📈',
-      text: `Ο/Η ${firstName(mostImp)} εμφανίζει τη μεγαλύτερη βελτίωση σήμερα με trend +${mostImp.trend}% έναντι του 30ήμερου μέσου.`,
-      color: '#22c55e',
-    },
-    triRole > 0 && {
-      icon: '⚡',
-      text: `${triRole} εργαζόμενοι μπορούν να καλύψουν και τους 3 ρόλους — κρίσιμο asset για ευέλικτη στελέχωση σε SLA peaks.`,
-      color: '#0ea5e9',
-    },
-  ].filter(Boolean) as { icon: string; text: string; color: string }[]
-
-  return (
-    <div className="mt-6">
-      <div className="flex items-center gap-2 mb-3">
-        <span className="text-sm font-bold text-slate-700">AI Insights</span>
-        <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-medium">
-          Auto-generated from data
-        </span>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {insights.map((ins, i) => (
-          <div key={i}
-            className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 flex gap-3 items-start">
-            <span className="text-lg leading-none mt-0.5">{ins.icon}</span>
-            <p className="text-xs text-slate-600 leading-relaxed">{ins.text}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// ── Rankings ───────────────────────────────────────────────────────────────────
-function RankingByRole({ all }: { all: EmployeeMetrics[] }) {
-  const roles = ['picker', 'packer', 'operator'] as const
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      {roles.map(role => {
-        const rc      = ROLE_CONFIG[role]
-        const members = all.filter(m => m.employee.primary_role === role && m.hasData)
-                           .sort((a, b) => b.impactScore - a.impactScore)
-        return (
-          <div key={role} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-50"
-              style={{ background: `${rc?.color}08` }}>
-              <span className="text-xs font-bold" style={{ color: rc?.color }}>{rc?.label}</span>
-              <span className="ml-2 text-[10px] text-slate-400">{members.length} εργαζόμενοι</span>
-            </div>
-            <div className="divide-y divide-slate-50">
-              {members.slice(0, 8).map((m, i) => (
-                <div key={m.employee.id} className="flex items-center gap-3 px-4 py-2.5">
-                  <span className="text-[10px] font-bold text-slate-400 w-4">#{i+1}</span>
-                  <div className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold"
-                    style={{ background: `${rc?.color}18`, color: rc?.color }}>
-                    {initials(m.employee.full_name)}
-                  </div>
-                  <span className="flex-1 text-xs text-slate-700 truncate">{m.employee.full_name}</span>
-                  <ImpactRing score={m.impactScore} size={28} />
-                </div>
-              ))}
-              {members.length === 0 && (
-                <p className="px-4 py-4 text-xs text-slate-400 text-center">Δεν υπάρχουν δεδομένα</p>
-              )}
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-function Top10({ sorted }: { sorted: EmployeeMetrics[] }) {
-  const top10 = sorted.filter(m => m.hasData).slice(0, 10)
-  return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-      <div className="px-5 py-4 border-b border-slate-50 bg-gradient-to-r from-amber-50 to-white">
-        <p className="text-sm font-bold text-slate-800">🏆 Top 10 Most Impactful Employees</p>
-        <p className="text-xs text-slate-400">Βασισμένο σε Impact Score (Productivity + Flexibility + Trend)</p>
-      </div>
-      <div className="divide-y divide-slate-50">
-        {top10.map((m, i) => {
-          const rc    = ROLE_CONFIG[m.employee.primary_role]
-          const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : null
-          return (
-            <div key={m.employee.id} className="flex items-center gap-4 px-5 py-3">
-              <div className="w-8 text-center">
-                {medal
-                  ? <span className="text-lg">{medal}</span>
-                  : <span className="text-sm font-bold text-slate-300">#{i+1}</span>}
-              </div>
-              <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold"
-                style={{ background: `${rc?.color}18`, color: rc?.color }}>
-                {initials(m.employee.full_name)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-700 truncate">{m.employee.full_name}</p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-[10px] font-medium" style={{ color: rc?.color }}>{rc?.label}</span>
-                  <span className="text-[10px] text-slate-400">{m.impactLabel}</span>
-                </div>
-              </div>
-              <ImpactRing score={m.impactScore} size={44} />
-              <div className="text-right min-w-[60px]">
-                <p className="text-sm font-bold font-mono" style={{ color: rc?.color }}>
-                  {m.monthUPH?.toFixed(1) ?? '—'}
-                </p>
-                <p className="text-[10px] text-slate-400">μ.ο. μήνα</p>
-              </div>
-              <TrendBadge trend={m.trend} />
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-function MostImproved({ all }: { all: EmployeeMetrics[] }) {
-  const improved = all.filter(m => m.trend != null && m.trend > 0)
-                      .sort((a, b) => (b.trend ?? 0) - (a.trend ?? 0))
-                      .slice(0, 10)
-  return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-      <div className="px-5 py-4 border-b border-slate-50 bg-gradient-to-r from-emerald-50 to-white">
-        <p className="text-sm font-bold text-slate-800">📈 Most Improved Today</p>
-        <p className="text-xs text-slate-400">Εργαζόμενοι που βελτίωσαν σήμερα vs 30ήμερο μέσο</p>
-      </div>
-      <div className="divide-y divide-slate-50">
-        {improved.map((m, i) => {
-          const rc = ROLE_CONFIG[m.employee.primary_role]
-          return (
-            <div key={m.employee.id} className="flex items-center gap-4 px-5 py-3">
-              <span className="text-[10px] font-bold text-slate-300 w-5">#{i+1}</span>
-              <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-                style={{ background: `${rc?.color}18`, color: rc?.color }}>
-                {initials(m.employee.full_name)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-700 truncate">{m.employee.full_name}</p>
-                <span className="text-[10px] font-medium" style={{ color: rc?.color }}>{rc?.label}</span>
-              </div>
-              <div className="flex items-center gap-1 text-emerald-600 font-bold text-sm">
-                <TrendingUp className="w-4 h-4" />+{m.trend}%
-              </div>
-              <div className="text-right">
-                <p className="text-xs font-mono text-slate-600">{m.monthUPH?.toFixed(1)} o/h</p>
-                <p className="text-[10px] text-slate-400">μ.ο. μήνα</p>
-              </div>
-            </div>
-          )
-        })}
-        {improved.length === 0 && (
-          <p className="px-5 py-8 text-sm text-slate-400 text-center">Δεν υπάρχουν βελτιώσεις σήμερα</p>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ── Main Page ──────────────────────────────────────────────────────────────────
-const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-  { key: 'impact',  label: 'Impact Score' },
-  { key: 'uph',    label: 'Orders/Hour' },
-  { key: 'orders', label: 'Παραγγελίες' },
-  { key: 'trend',  label: 'Trend' },
-  { key: 'flex',   label: 'Flexibility' },
-  { key: 'name',   label: 'Αλφαβητικά' },
+// ── Role display groups (render order) ───────────────────────────────────────
+const ROLE_GROUPS = [
+  { roles: ['operator'],                                                    label: 'OPERATORS',           color: '#f59e0b' },
+  { roles: ['packer'],                                                      label: 'PACKERS',             color: '#22c55e' },
+  { roles: ['picker'],                                                      label: 'PICKERS (ΡΑΦΙ)',      color: '#3b82f6' },
+  { roles: ['palletizer', 'sorter', 'validator', 'transporter', 'team_leader'], label: 'PALLETIZERS / SORTERS', color: '#8b5cf6' },
 ]
 
-const ROLE_TABS: { key: RoleFilter; label: string }[] = [
-  { key: 'all',      label: 'Όλοι οι Εργαζόμενοι' },
-  { key: 'operator', label: 'Operators' },
-  { key: 'picker',   label: 'Pickers (Ράφι)' },
-  { key: 'packer',   label: 'Packers' },
-]
+// ── Session validity ──────────────────────────────────────────────────────────
+function isValidDay(r: DayRow) {
+  return r.ORES >= 3 && r.ORDERS > 100 && r.ORES < 13
+}
 
-const VIEW_TABS: { key: TabView; label: string; icon: string }[] = [
-  { key: 'list',    label: 'Λίστα',      icon: '📋' },
-  { key: 'top10',   label: 'Top 10',     icon: '🏆' },
-  { key: 'byRole',  label: 'Ανά Ρόλο',   icon: '🎭' },
-  { key: 'improved',label: 'Βελτίωση',   icon: '📈' },
-]
+// ── Per-employee computed stats ───────────────────────────────────────────────
+interface EmpStats {
+  liveUPH:     number | null
+  isLive:      boolean         // true = today's session, false = monthly avg
+  target:      number
+  gap:         number | null   // liveUPH − target
+  gapPct:      number | null   // gap / target × 100
+  status:      'above' | 'near' | 'below' | 'none'
+  achieveDays: number
+  totalDays:   number
+  achievePct:  number | null   // days on/above target / total valid days
+  trendPct:    number | null   // today vs month avg %
+  streakAbove: number          // consecutive most-recent days above target
+  streakBelow: number
+  validDays:   DayRow[]
+}
 
-export function EmployeeListPage() {
-  const navigate = useNavigate()
-  const { allMetrics, prodSnap, totalOrdersToday, meanUPH, loading } = useProductivityData()
+function computeStats(emp: Employee, metrics: any, prodSnap: any): EmpStats {
+  const target = ROLE_TARGETS[emp.primary_role] ?? 70
 
-  const [search,     setSearch]     = useState('')
-  const [sort,       setSort]       = useState<SortKey>('impact')
-  const [asc,        setAsc]        = useState(false)
-  const [roleFilter, setRoleFilter] = useState<RoleFilter>('all')
-  const [viewMode,   setViewMode]   = useState<ViewMode>('list')
-  const [tabView,    setTabView]    = useState<TabView>('list')
-  const [sortOpen,   setSortOpen]   = useState(false)
+  const roleArr: DayRow[] | undefined =
+    emp.primary_role === 'operator' ? prodSnap?.operators_days :
+    emp.primary_role === 'packer'   ? prodSnap?.packers_days   :
+    emp.primary_role === 'picker'   ? prodSnap?.pickers_days   :
+    undefined
 
-  // ── Computed stats ───────────────────────────────────────────────────────────
-  const active    = useMemo(() => allMetrics.filter(m => m.hasData), [allMetrics])
-  const avgImpact = useMemo(() => {
-    if (!active.length) return 0
-    return Math.round(active.reduce((s, m) => s + m.impactScore, 0) / active.length)
-  }, [active])
+  const validDays: DayRow[] = (roleArr ?? [])
+    .filter((r: DayRow) => nameMatch(emp.full_name, r.ONOMA, emp.oracle_name) && isValidDay(r))
+    .sort((a: DayRow, b: DayRow) => a.DAY.localeCompare(b.DAY))
 
-  const roleCount = (role: RoleFilter) =>
-    role === 'all' ? allMetrics.length
-    : allMetrics.filter(m => m.employee.primary_role === role).length
+  const todayUPH = metrics?.todayUPH ?? null
+  const monthUPH = metrics?.monthUPH ?? null
+  const liveUPH  = todayUPH ?? monthUPH
+  const isLive   = todayUPH != null
 
-  // ── Sorted + filtered list ───────────────────────────────────────────────────
-  const sortedAll = useMemo(() => {
-    return [...allMetrics].sort((a, b) => {
-      let va: number, vb: number
-      switch (sort) {
-        case 'name':    return asc ? a.employee.full_name.localeCompare(b.employee.full_name)
-                                   : b.employee.full_name.localeCompare(a.employee.full_name)
-        case 'uph':    va = a.monthUPH ?? -1;     vb = b.monthUPH ?? -1; break
-        case 'orders': va = a.ordersToday ?? -1;  vb = b.ordersToday ?? -1; break
-        case 'trend':  va = a.trend ?? -999;       vb = b.trend ?? -999; break
-        case 'flex':   va = a.flexibilityRoles;    vb = b.flexibilityRoles; break
-        default:       va = a.impactScore;         vb = b.impactScore; break
-      }
-      return asc ? va - vb : vb - va
-    })
-  }, [allMetrics, sort, asc])
+  const gap    = liveUPH != null ? Math.round((liveUPH - target) * 10) / 10 : null
+  const gapPct = liveUPH != null ? Math.round(((liveUPH - target) / target) * 100) : null
 
-  const filtered = useMemo(() => {
-    return sortedAll.filter(m => {
-      if (roleFilter !== 'all' && m.employee.primary_role !== roleFilter) return false
-      if (search) return m.employee.full_name.toLowerCase().includes(search.toLowerCase())
-      return true
-    })
-  }, [sortedAll, roleFilter, search])
+  const status: EmpStats['status'] =
+    liveUPH == null           ? 'none'  :
+    liveUPH >= target         ? 'above' :
+    liveUPH >= target * 0.9   ? 'near'  : 'below'
 
-  const toggleSort = (key: SortKey) => {
-    if (sort === key) setAsc(a => !a)
-    else { setSort(key); setAsc(false) }
-    setSortOpen(false)
+  const achieveDays = validDays.filter(d => (d.UPH ?? 0) >= target).length
+  const achievePct  = validDays.length > 0
+    ? Math.round((achieveDays / validDays.length) * 100) : null
+
+  // Streak from most recent day
+  const desc = [...validDays].reverse()
+  let streakAbove = 0, streakBelow = 0
+  for (const d of desc) {
+    if ((d.UPH ?? 0) >= target) {
+      if (streakBelow > 0) break
+      streakAbove++
+    } else {
+      if (streakAbove > 0) break
+      streakBelow++
+    }
   }
 
-  const sortLabel = SORT_OPTIONS.find(o => o.key === sort)?.label ?? 'Impact Score'
+  return {
+    liveUPH, isLive, target, gap, gapPct, status,
+    achieveDays, totalDays: validDays.length, achievePct,
+    trendPct: metrics?.trend ?? null,
+    streakAbove, streakBelow, validDays,
+  }
+}
+
+// ── Small UI primitives ───────────────────────────────────────────────────────
+function StatusDot({ status }: { status: EmpStats['status'] }) {
+  const cls =
+    status === 'above' ? 'bg-emerald-500' :
+    status === 'near'  ? 'bg-amber-400'   :
+    status === 'below' ? 'bg-red-500'     : 'bg-slate-300'
+  return <span className={`inline-block w-2.5 h-2.5 rounded-full flex-shrink-0 ${cls}`} />
+}
+
+function GapBadge({ gap, pct }: { gap: number | null; pct: number | null }) {
+  if (gap == null) return <span className="text-slate-300 text-xs">—</span>
+  const pos = gap >= 0
+  return (
+    <div className={`text-xs font-bold leading-none ${pos ? 'text-emerald-600' : 'text-red-500'}`}>
+      <div>{pos ? '+' : ''}{gap}</div>
+      <div className="text-[10px] font-normal opacity-70">{pos ? '+' : ''}{pct}%</div>
+    </div>
+  )
+}
+
+function AchieveBadge({ achieved, total, pct }: { achieved: number; total: number; pct: number | null }) {
+  if (pct == null || total === 0) return <span className="text-slate-300 text-xs">—</span>
+  const color = pct >= 80 ? '#22c55e' : pct >= 60 ? '#f59e0b' : '#ef4444'
+  return (
+    <div className="flex flex-col gap-0.5 min-w-[72px]">
+      <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
+        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
+      </div>
+      <span className="text-[10px] text-slate-500 font-mono whitespace-nowrap">
+        {achieved}/{total}d · <span style={{ color }}>{pct}%</span>
+      </span>
+    </div>
+  )
+}
+
+// ── Group header ──────────────────────────────────────────────────────────────
+interface GroupInfo {
+  label: string; color: string
+  employees: Employee[]
+  withData: { emp: Employee; stats: EmpStats }[]
+  avgUPH: number | null; target: number; gapPct: number | null
+  above: number; near: number; below: number; noData: number
+}
+
+function GroupHeader({ g, collapsed, onToggle }: {
+  g: GroupInfo; collapsed: boolean; onToggle: () => void
+}) {
+  const gapColor =
+    g.gapPct == null ? '#94a3b8' :
+    g.gapPct >= 0    ? '#22c55e' :
+    g.gapPct >= -10  ? '#f59e0b' : '#ef4444'
 
   return (
-    <div className="min-h-full bg-slate-50">
+    <button
+      onClick={onToggle}
+      className="w-full flex items-center gap-4 px-4 py-2.5 text-left bg-slate-100 border-y border-slate-200 hover:bg-slate-200/70 transition-colors sticky top-0 z-10"
+      style={{ borderLeft: `4px solid ${g.color}` }}
+    >
+      <span className="flex items-center gap-2 flex-shrink-0">
+        {collapsed
+          ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+          : <ChevronUp   className="w-3.5 h-3.5 text-slate-400" />}
+        <span className="font-bold text-xs text-slate-700 tracking-widest uppercase">{g.label}</span>
+        <span className="text-slate-400 text-xs">({g.employees.length})</span>
+      </span>
 
-      {/* ── Page Header ─────────────────────────────────────────────────────── */}
-      <div className="bg-white border-b border-slate-200 px-6 py-4">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/team')} className="p-2 rounded-lg hover:bg-slate-100">
-            <ArrowLeft className="w-4 h-4 text-slate-500" />
-          </button>
-          <div className="flex-1">
-            <h1 className="text-xl font-bold text-slate-800">Εργαζόμενοι</h1>
-            <p className="text-xs text-slate-400">Manage and monitor your warehouse team performance</p>
+      {g.avgUPH != null && (
+        <div className="flex items-center gap-5 flex-1">
+          <div className="flex flex-col">
+            <span className="text-[9px] text-slate-400 uppercase tracking-wide font-semibold">Avg UPH</span>
+            <span className="text-xs font-bold text-slate-700">{g.avgUPH} o/h</span>
           </div>
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
-            <input
-              value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Search employees..."
-              className="pl-8 pr-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-300 w-52"
-            />
+          <div className="flex flex-col">
+            <span className="text-[9px] text-slate-400 uppercase tracking-wide font-semibold">Στόχος</span>
+            <span className="text-xs font-bold text-slate-700">{g.target} o/h</span>
           </div>
+          <div className="flex flex-col">
+            <span className="text-[9px] text-slate-400 uppercase tracking-wide font-semibold">Gap</span>
+            <span className="text-xs font-bold" style={{ color: gapColor }}>
+              {g.gapPct != null ? `${g.gapPct >= 0 ? '+' : ''}${g.gapPct}%` : '—'}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-xs ml-auto">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />{g.above}</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400  inline-block" />{g.near}</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500    inline-block" />{g.below}</span>
+            {g.noData > 0 && (
+              <span className="flex items-center gap-1 text-slate-400">
+                <span className="w-2 h-2 rounded-full bg-slate-300 inline-block" />{g.noData}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+    </button>
+  )
+}
+
+// ── Employee row ──────────────────────────────────────────────────────────────
+function EmpRow({ emp, stats, isSelected, onClick }: {
+  emp: Employee; stats: EmpStats; isSelected: boolean; onClick: () => void
+}) {
+  const bg =
+    isSelected              ? 'bg-blue-50'          :
+    stats.status === 'below' ? 'hover:bg-red-50/40'     :
+    stats.status === 'above' ? 'hover:bg-emerald-50/40' : 'hover:bg-slate-50'
+
+  return (
+    <tr
+      onClick={onClick}
+      className={`border-b border-slate-100 cursor-pointer transition-colors ${bg}`}
+      style={isSelected ? { borderLeft: '3px solid #3b82f6' } : {}}
+    >
+      {/* Employee */}
+      <td className="px-4 py-2.5">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-500 to-slate-700 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+            {initials(emp.full_name)}
+          </div>
+          <div className="min-w-0">
+            <div className="text-xs font-semibold text-slate-800 truncate leading-tight">{emp.full_name}</div>
+            <div className="text-[10px] text-slate-400 capitalize">{emp.primary_role}</div>
+          </div>
+        </div>
+      </td>
+
+      {/* Live UPH */}
+      <td className="px-3 py-2.5 text-center">
+        {stats.liveUPH != null ? (
+          <div className="flex flex-col items-center leading-none">
+            <span className="text-sm font-bold text-slate-800">{Math.round(stats.liveUPH)}</span>
+            <span className="text-[9px] font-semibold mt-0.5" style={{ color: stats.isLive ? '#22c55e' : '#94a3b8' }}>
+              {stats.isLive ? '● LIVE' : 'μ.ο. μήνα'}
+            </span>
+          </div>
+        ) : <span className="text-slate-300 text-xs">—</span>}
+      </td>
+
+      {/* Target */}
+      <td className="px-3 py-2.5 text-center">
+        <span className="text-xs text-slate-500 font-mono">{stats.target}</span>
+      </td>
+
+      {/* Gap */}
+      <td className="px-3 py-2.5 text-center">
+        <GapBadge gap={stats.gap} pct={stats.gapPct} />
+      </td>
+
+      {/* Trend */}
+      <td className="px-3 py-2.5 text-center">
+        {stats.trendPct != null ? (
+          <span className={`text-xs font-bold ${stats.trendPct >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+            {stats.trendPct >= 0 ? '▲' : '▼'} {Math.abs(stats.trendPct)}%
+          </span>
+        ) : <span className="text-slate-300 text-xs">—</span>}
+      </td>
+
+      {/* Target Achievement */}
+      <td className="px-3 py-2.5">
+        <AchieveBadge achieved={stats.achieveDays} total={stats.totalDays} pct={stats.achievePct} />
+      </td>
+
+      {/* Status */}
+      <td className="px-3 py-2.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <StatusDot status={stats.status} />
+          <span className="text-[10px] text-slate-500">
+            {stats.status === 'above' ? 'Above' : stats.status === 'near' ? 'Near' : stats.status === 'below' ? 'Below' : '—'}
+          </span>
+          {stats.streakBelow >= 3 && (
+            <span className="text-[9px] bg-red-100 text-red-600 font-bold px-1 rounded">↓{stats.streakBelow}d</span>
+          )}
+          {stats.streakAbove >= 5 && (
+            <span className="text-[9px] bg-emerald-100 text-emerald-700 font-bold px-1 rounded">🔥{stats.streakAbove}d</span>
+          )}
+        </div>
+      </td>
+    </tr>
+  )
+}
+
+// ── Alerts computation ────────────────────────────────────────────────────────
+interface Alert { level: 'critical' | 'warning' | 'info'; text: string }
+
+function computeAlerts(groups: GroupInfo[], allStats: { emp: Employee; stats: EmpStats }[]): Alert[] {
+  const alerts: Alert[] = []
+
+  for (const g of groups) {
+    if (g.below >= 3) alerts.push({ level: 'critical', text: `${g.below} ${g.label} κάτω από στόχο` })
+    else if (g.below > 0) alerts.push({ level: 'warning', text: `${g.below} ${g.label} κάτω από στόχο` })
+  }
+  for (const { emp, stats } of allStats) {
+    if (stats.streakBelow >= 3) {
+      const p = emp.full_name.split(' ')
+      alerts.push({ level: 'warning', text: `${p[0]} ${p[1]?.[0] ?? ''}.  κάτω από στόχο ${stats.streakBelow} συνεχόμενες ημέρες` })
+    }
+  }
+  for (const { emp, stats } of allStats) {
+    if (stats.streakAbove >= 7) {
+      const p = emp.full_name.split(' ')
+      alerts.push({ level: 'info', text: `${p[0]} ${p[1]?.[0] ?? ''}.  πάνω από στόχο ${stats.streakAbove} συνεχόμενες ημέρες 🔥` })
+    }
+  }
+  return alerts
+}
+
+// ── Right panel ───────────────────────────────────────────────────────────────
+function RightPanel({ alerts, actions }: { alerts: Alert[]; actions: string[] }) {
+  return (
+    <div className="flex flex-col gap-4 p-4">
+      <div>
+        <div className="flex items-center gap-2 mb-2.5">
+          <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
+          <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">AI Alerts</span>
+          {alerts.length > 0 && (
+            <span className="ml-auto bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">{alerts.length}</span>
+          )}
+        </div>
+        <div className="flex flex-col gap-1.5">
+          {alerts.length === 0 ? (
+            <div className="text-[11px] text-slate-400 italic px-1">Όλα εντάξει ✓</div>
+          ) : alerts.map((a, i) => (
+            <div key={i} className={`flex items-start gap-2 p-2 rounded-lg text-[11px] leading-snug ${
+              a.level === 'critical' ? 'bg-red-50 border border-red-200 text-red-700'       :
+              a.level === 'warning'  ? 'bg-amber-50 border border-amber-200 text-amber-700' :
+              'bg-blue-50 border border-blue-200 text-blue-700'
+            }`}>
+              <span className="flex-shrink-0">{a.level === 'critical' ? '🚨' : a.level === 'warning' ? '⚠️' : '🔥'}</span>
+              {a.text}
+            </div>
+          ))}
         </div>
       </div>
 
-      <div className="p-6 space-y-5">
+      <div className="border-t border-slate-100 pt-4">
+        <div className="flex items-center gap-2 mb-2.5">
+          <Zap className="w-3.5 h-3.5 text-blue-500" />
+          <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Top Actions</span>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          {actions.length === 0 ? (
+            <div className="text-[11px] text-slate-400 italic px-1">Δεν υπάρχουν προτάσεις</div>
+          ) : actions.map((a, i) => (
+            <div key={i} className="flex items-start gap-2 p-2 rounded-lg bg-slate-50 border border-slate-200 text-[11px] text-slate-700 leading-snug">
+              <span className="flex-shrink-0">💡</span>{a}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
-        {/* ── Stats Row ───────────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard label="Total Employees" value={allMetrics.length}
-            sub={`${active.length} ενεργοί σήμερα`} icon={Users} color="#3b82f6" />
-          <StatCard label="Average Impact Score" value={`${avgImpact}/100`}
-            icon={Zap} color={impactColor(avgImpact)} />
-          <StatCard label="Total Orders Today" value={totalOrdersToday.toLocaleString()}
-            icon={Package} color="#f97316" />
-          <StatCard label="Avg Orders/Hour" value={meanUPH?.toFixed(1) ?? '—'}
-            icon={BarChart2} color="#22c55e" />
+// ── Employee Drawer ───────────────────────────────────────────────────────────
+function EmployeeDrawer({ emp, stats, metrics, rank, groupSize, onClose, onNavigate }: {
+  emp: Employee; stats: EmpStats; metrics: any
+  rank: number; groupSize: number
+  onClose: () => void; onNavigate: () => void
+}) {
+  const impScore = metrics?.impactScore ?? 0
+  const { label: ratingLabel, stars, color: ratingColor } = getRating(impScore)
+
+  const chartData = stats.validDays.slice(-14).map(d => ({
+    day: d.DAY.substring(5),
+    uph: d.UPH ?? 0,
+  }))
+
+  const avgOrders = stats.validDays.length > 0
+    ? Math.round(stats.validDays.reduce((s, d) => s + d.ORDERS, 0) / stats.validDays.length) : null
+  const bestUPH = stats.validDays.length > 0
+    ? Math.max(...stats.validDays.map(d => d.UPH ?? 0)) : null
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/20 z-40" onClick={onClose} />
+      <div className="fixed inset-y-0 right-0 w-80 bg-white shadow-2xl border-l border-slate-200 flex flex-col z-50">
+
+        {/* Header */}
+        <div className="flex items-center gap-3 p-4 border-b border-slate-100 flex-shrink-0">
+          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+            {initials(emp.full_name)}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-bold text-slate-800 text-sm truncate">{emp.full_name}</div>
+            <div className="text-[10px] text-slate-500 capitalize">{emp.primary_role}</div>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 flex-shrink-0">
+            <X className="w-4 h-4" />
+          </button>
         </div>
 
-        {/* ── Main Card ───────────────────────────────────────────────────────── */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
 
-          {/* View tabs */}
-          <div className="border-b border-slate-100 px-5 flex items-center justify-between">
-            <div className="flex">
-              {VIEW_TABS.map(tab => (
-                <button key={tab.key} onClick={() => setTabView(tab.key)}
-                  className={cn('px-4 py-3.5 text-xs font-semibold flex items-center gap-1.5 border-b-2 transition-colors',
-                    tabView === tab.key
-                      ? 'border-slate-800 text-slate-800'
-                      : 'border-transparent text-slate-400 hover:text-slate-600')}>
-                  <span>{tab.icon}</span>{tab.label}
-                </button>
-              ))}
+          {/* Roles */}
+          <div className="grid grid-cols-3 gap-1.5">
+            {([['1ος Ρόλος', emp.primary_role], ['2ος Ρόλος', emp.secondary_role], ['3ος Ρόλος', emp.tertiary_role]] as [string, string|null][]).map(([label, value]) => (
+              <div key={label} className="bg-slate-50 rounded-lg p-2 text-center border border-slate-100">
+                <div className="text-[9px] text-slate-400 uppercase font-semibold tracking-wide">{label}</div>
+                <div className="text-[11px] font-bold text-slate-700 capitalize mt-0.5 truncate">{value ?? '—'}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Impact + Rating */}
+          <div className="grid grid-cols-2 gap-1.5">
+            <div className="bg-slate-50 rounded-lg p-2.5 text-center border border-slate-100">
+              <div className="text-[9px] text-slate-400 uppercase font-semibold mb-1">Impact Score</div>
+              <div className="text-2xl font-black leading-none" style={{ color: impactColor(impScore) }}>{impScore}</div>
+              <div className="text-[10px] text-slate-500 mt-1">{getImpactLabel(impScore)}</div>
+            </div>
+            <div className="bg-slate-50 rounded-lg p-2.5 text-center border border-slate-100">
+              <div className="text-[9px] text-slate-400 uppercase font-semibold mb-1">Rating</div>
+              <div className="text-base leading-none" style={{ color: ratingColor }}>
+                {'★'.repeat(stars)}{'☆'.repeat(5 - stars)}
+              </div>
+              <div className="text-[10px] text-slate-500 mt-1">{ratingLabel}</div>
             </div>
           </div>
 
-          {tabView === 'list' && (
-            <>
-              {/* Filter row */}
-              <div className="flex items-center justify-between px-5 py-3 border-b border-slate-50 bg-slate-50/50">
-                <div className="flex gap-0">
-                  {ROLE_TABS.map(tab => {
-                    const rc     = ROLE_CONFIG[tab.key as keyof typeof ROLE_CONFIG]
-                    const active = roleFilter === tab.key
-                    return (
-                      <button key={tab.key} onClick={() => setRoleFilter(tab.key)}
-                        className={cn('px-3.5 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5',
-                          active
-                            ? tab.key === 'all' ? 'bg-slate-800 text-white' : 'text-white'
-                            : 'text-slate-500 hover:bg-slate-100'
-                        )}
-                        style={active && tab.key !== 'all' ? { background: rc?.color } : {}}>
-                        {tab.label}
-                        <span className={cn('text-[10px] rounded-full px-1.5 py-0.5 font-bold',
-                          active ? 'bg-white/20' : 'bg-slate-200 text-slate-400')}>
-                          {roleCount(tab.key)}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
+          {/* Live stats */}
+          <div className="grid grid-cols-2 gap-1.5">
+            <div className="rounded-lg p-2.5 border border-slate-100 bg-slate-50">
+              <div className="text-[9px] text-slate-400 uppercase font-semibold">Live UPH</div>
+              <div className={`text-xl font-black leading-none mt-0.5 ${
+                stats.status === 'above' ? 'text-emerald-600' :
+                stats.status === 'below' ? 'text-red-500'     : 'text-amber-500'
+              }`}>{stats.liveUPH != null ? Math.round(stats.liveUPH) : '—'}</div>
+              <div className="text-[10px] text-slate-400 mt-0.5">στόχος: {stats.target}</div>
+            </div>
+            <div className="rounded-lg p-2.5 border border-slate-100 bg-slate-50">
+              <div className="text-[9px] text-slate-400 uppercase font-semibold">Target Ach.</div>
+              <div className={`text-xl font-black leading-none mt-0.5 ${
+                (stats.achievePct ?? 0) >= 80 ? 'text-emerald-600' :
+                (stats.achievePct ?? 0) >= 60 ? 'text-amber-500'   : 'text-red-500'
+              }`}>{stats.achievePct != null ? `${stats.achievePct}%` : '—'}</div>
+              <div className="text-[10px] text-slate-400 mt-0.5">{stats.achieveDays}/{stats.totalDays} ημέρες</div>
+            </div>
+          </div>
 
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-slate-400">{filtered.length} εμφανίζονται</span>
-
-                  {/* Sort dropdown */}
-                  <div className="relative">
-                    <button onClick={() => setSortOpen(o => !o)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 bg-white hover:border-slate-300">
-                      Sort: {sortLabel}
-                      {asc ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                    </button>
-                    {sortOpen && (
-                      <div className="absolute right-0 mt-1 w-44 bg-white border border-slate-200 rounded-xl shadow-lg z-10 overflow-hidden py-1">
-                        {SORT_OPTIONS.map(opt => (
-                          <button key={opt.key} onClick={() => toggleSort(opt.key)}
-                            className={cn('w-full text-left px-3 py-2 text-xs hover:bg-slate-50 flex items-center justify-between',
-                              sort === opt.key ? 'text-slate-800 font-semibold' : 'text-slate-500')}>
-                            {opt.label}
-                            {sort === opt.key && (asc ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* View toggle */}
-                  <div className="flex gap-1 p-0.5 bg-slate-100 rounded-lg">
-                    <button onClick={() => setViewMode('list')}
-                      className={cn('p-1.5 rounded-md transition-all', viewMode === 'list' ? 'bg-white shadow-sm' : 'hover:bg-slate-200')}>
-                      <List className="w-3.5 h-3.5 text-slate-500" />
-                    </button>
-                    <button onClick={() => setViewMode('grid')}
-                      className={cn('p-1.5 rounded-md transition-all', viewMode === 'grid' ? 'bg-white shadow-sm' : 'hover:bg-slate-200')}>
-                      <Grid3X3 className="w-3.5 h-3.5 text-slate-500" />
-                    </button>
-                  </div>
-                </div>
+          {/* Ranking */}
+          {rank > 0 && groupSize > 0 && (
+            <div className="rounded-lg p-2.5 bg-blue-50 border border-blue-100 flex items-center gap-3">
+              <span className="text-2xl font-black text-blue-600">#{rank}</span>
+              <div>
+                <div className="text-[10px] text-blue-700 font-semibold">Ranking στο ρόλο</div>
+                <div className="text-[10px] text-blue-400">από {groupSize} εργαζομένους</div>
               </div>
-
-              {/* Grid View */}
-              {viewMode === 'grid' ? (
-                <div className="p-5 grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {filtered.map((m, i) => (
-                    <EmployeeCard key={m.employee.id} m={m} rank={i + 1}
-                      days={getEmployeeDays(m.employee.full_name, prodSnap)}
-                      onClick={() => navigate(`/team/employees/${m.employee.id}`)} />
-                  ))}
-                  {filtered.length === 0 && (
-                    <div className="col-span-full py-12 text-center text-sm text-slate-400">
-                      Δεν βρέθηκαν αποτελέσματα
-                    </div>
-                  )}
-                </div>
-              ) : (
-                /* List/Table View */
-                <table className="w-full">
-                  <thead className="bg-slate-50/80">
-                    <tr>
-                      {[
-                        { label: 'Εργαζόμενος' },
-                        { label: 'Impact Score', center: true },
-                        { label: 'Orders/Hour', center: true },
-                        { label: 'Παραγγελίες', center: true },
-                        { label: 'Trend 30D', center: true },
-                        { label: 'Flexibility', center: true },
-                        { label: 'Rating' },
-                      ].map(col => (
-                        <th key={col.label}
-                          className={cn('px-4 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-wider',
-                            col.center ? 'text-center' : 'text-left')}>
-                          {col.label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {filtered.map((m, i) => {
-                      const rc   = ROLE_CONFIG[m.employee.primary_role]
-                      const days = getEmployeeDays(m.employee.full_name, prodSnap)
-                      return (
-                        <tr key={m.employee.id}
-                          onClick={() => navigate(`/team/employees/${m.employee.id}`)}
-                          className={cn('cursor-pointer hover:bg-slate-50/80 transition-colors group',
-                            !m.hasData && 'opacity-50')}>
-                          {/* Employee */}
-                          <td className="px-4 py-3.5">
-                            <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                                style={{ background: `${rc?.color}18`, color: rc?.color }}>
-                                {initials(m.employee.full_name)}
-                              </div>
-                              <div>
-                                <p className="text-sm font-semibold text-slate-700 group-hover:text-slate-900 leading-tight">
-                                  {m.employee.full_name}
-                                </p>
-                                <div className="flex items-center gap-1.5 mt-0.5">
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
-                                    style={{ background: `${rc?.color}18`, color: rc?.color }}>
-                                    {rc?.label}
-                                  </span>
-                                  {i < 3 && m.hasData && (
-                                    <span className="text-[10px] text-amber-500 font-bold">
-                                      {i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                          {/* Impact Ring */}
-                          <td className="px-4 py-3.5 text-center">
-                            <div className="flex flex-col items-center gap-0.5">
-                              <ImpactRing score={m.impactScore} size={44} />
-                              <span className="text-[10px] font-medium"
-                                style={{ color: impactColor(m.impactScore) }}>
-                                {m.impactLabel}
-                              </span>
-                            </div>
-                          </td>
-                          {/* UPH — 30-day avg */}
-                          <td className="px-4 py-3.5 text-center">
-                            <div>
-                              <span className="text-sm font-bold font-mono"
-                                style={{ color: m.monthUPH ? rc?.color : '#cbd5e1' }}>
-                                {m.monthUPH?.toFixed(1) ?? '—'}
-                              </span>
-                              {m.monthUPH && (
-                                <p className="text-[10px] text-slate-400">μ.ο. μήνα</p>
-                              )}
-                            </div>
-                          </td>
-                          {/* Orders */}
-                          <td className="px-4 py-3.5 text-center">
-                            <span className="text-sm font-mono text-slate-600">
-                              {m.ordersToday ?? '—'}
-                            </span>
-                          </td>
-                          {/* Trend */}
-                          <td className="px-4 py-3.5 text-center">
-                            <div className="flex flex-col items-center gap-1">
-                              <Sparkline days={days} />
-                              <TrendBadge trend={m.trend} />
-                            </div>
-                          </td>
-                          {/* Flexibility */}
-                          <td className="px-4 py-3.5 text-center">
-                            <div className="flex justify-center">
-                              <FlexDots count={m.flexibilityRoles} />
-                            </div>
-                          </td>
-                          {/* Rating */}
-                          <td className="px-4 py-3.5">
-                            <div className="flex flex-col gap-0.5">
-                              <Stars n={m.ratingStars} />
-                              <span className="text-[10px] text-slate-400">{m.rating}</span>
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                    {filtered.length === 0 && (
-                      <tr>
-                        <td colSpan={7} className="px-5 py-12 text-center text-sm text-slate-400">
-                          Δεν βρέθηκαν αποτελέσματα
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              )}
-            </>
+            </div>
           )}
 
-          {tabView === 'top10'    && <div className="p-5"><Top10 sorted={sortedAll} /></div>}
-          {tabView === 'byRole'   && <div className="p-5"><RankingByRole all={allMetrics} /></div>}
-          {tabView === 'improved' && <div className="p-5"><MostImproved all={allMetrics} /></div>}
+          {/* Streak */}
+          {(stats.streakAbove > 0 || stats.streakBelow > 0) && (
+            <div className={`rounded-lg p-2.5 text-[11px] font-medium ${
+              stats.streakAbove > 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                    : 'bg-red-50 text-red-700 border border-red-100'
+            }`}>
+              {stats.streakAbove > 0
+                ? `🔥 Πάνω από στόχο ${stats.streakAbove} συνεχόμενες ημέρες`
+                : `⚠️ Κάτω από στόχο ${stats.streakBelow} συνεχόμενες ημέρες`}
+            </div>
+          )}
+
+          {/* UPH bar chart */}
+          {chartData.length > 0 && (
+            <div>
+              <div className="text-[10px] text-slate-400 uppercase font-semibold mb-1.5">
+                UPH Ανά Ημέρα (τελευταίες {chartData.length})
+              </div>
+              <ResponsiveContainer width="100%" height={80}>
+                <BarChart data={chartData} barSize={12} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                  <XAxis dataKey="day" tick={{ fontSize: 7, fill: '#94a3b8' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                  <RTooltip
+                    content={({ active, payload }) =>
+                      active && payload?.length ? (
+                        <div className="bg-slate-800 text-white text-[10px] px-2 py-1 rounded shadow">
+                          {payload[0].payload.day}: {payload[0].value} o/h
+                        </div>
+                      ) : null
+                    }
+                  />
+                  <Bar dataKey="uph">
+                    {chartData.map((d, i) => (
+                      <Cell
+                        key={i}
+                        fill={d.uph >= stats.target ? '#22c55e' : d.uph >= stats.target * 0.9 ? '#f59e0b' : '#ef4444'}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Averages */}
+          <div className="grid grid-cols-2 gap-1.5">
+            <div className="bg-slate-50 rounded-lg p-2 border border-slate-100">
+              <div className="text-[9px] text-slate-400 uppercase font-semibold">Μέσες Παρ./Ημέρα</div>
+              <div className="text-sm font-bold text-slate-700 mt-0.5">{avgOrders != null ? `${avgOrders} orders` : '—'}</div>
+            </div>
+            <div className="bg-slate-50 rounded-lg p-2 border border-slate-100">
+              <div className="text-[9px] text-slate-400 uppercase font-semibold">Καλύτερη Ημέρα</div>
+              <div className="text-sm font-bold text-slate-700 mt-0.5">{bestUPH != null ? `${bestUPH.toFixed(0)} o/h` : '—'}</div>
+            </div>
+          </div>
+
+          {/* Skill level */}
+          <div className="bg-slate-50 rounded-lg p-2.5 border border-slate-100">
+            <div className="text-[9px] text-slate-400 uppercase font-semibold mb-1.5">Skill Level</div>
+            <div className="flex items-center gap-1.5">
+              {Array.from({ length: 5 }, (_, i) => (
+                <div key={i} className={`flex-1 h-1.5 rounded-full ${parseInt(emp.skill_level) > i ? 'bg-blue-500' : 'bg-slate-200'}`} />
+              ))}
+              <span className="text-xs font-bold text-slate-600 ml-1">{emp.skill_level}/5</span>
+            </div>
+          </div>
+
+          {/* Full profile */}
+          <button
+            onClick={onNavigate}
+            className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border border-blue-200 text-blue-600 text-xs font-semibold hover:bg-blue-50 transition-colors"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            Πλήρες Προφίλ & Ιστορικό
+          </button>
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
+export function EmployeeListPage() {
+  const navigate   = useNavigate()
+  const employees  = useAppStore(s => s.employees)
+  const { prodSnap, allMetrics, loading } = useProductivityData()
+
+  const [search,      setSearch]      = useState('')
+  const [filter,      setFilter]      = useState<'all' | 'above' | 'near' | 'below'>('all')
+  const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null)
+  const [collapsed,   setCollapsed]   = useState<Record<string, boolean>>({})
+
+  // Compute stats for every employee
+  const empStatMap = useMemo(() => {
+    const map = new Map<string, EmpStats>()
+    for (const emp of employees) {
+      const metrics = allMetrics.find(m => m.employee.id === emp.id)
+      map.set(emp.id, computeStats(emp, metrics, prodSnap))
+    }
+    return map
+  }, [employees, allMetrics, prodSnap])
+
+  // Build group info
+  const groupInfos: GroupInfo[] = useMemo(() =>
+    ROLE_GROUPS.map(g => {
+      const emps     = employees.filter(e => g.roles.includes(e.primary_role))
+      const withData = emps
+        .map(e => ({ emp: e, stats: empStatMap.get(e.id)! }))
+        .filter(x => x.stats.liveUPH != null)
+
+      const avgUPH = withData.length > 0
+        ? Math.round(withData.reduce((s, x) => s + (x.stats.liveUPH ?? 0), 0) / withData.length)
+        : null
+      const target  = ROLE_TARGETS[g.roles[0]] ?? 70
+      const gapPct  = avgUPH != null
+        ? Math.round(((avgUPH - target) / target) * 100) : null
+
+      return {
+        label: g.label, color: g.color,
+        employees: emps, withData, avgUPH, target, gapPct,
+        above:  withData.filter(x => x.stats.status === 'above').length,
+        near:   withData.filter(x => x.stats.status === 'near').length,
+        below:  withData.filter(x => x.stats.status === 'below').length,
+        noData: emps.length - withData.length,
+      }
+    }),
+    [employees, empStatMap]
+  )
+
+  const allWithStats = useMemo(() =>
+    employees.map(e => ({ emp: e, stats: empStatMap.get(e.id)! })),
+    [employees, empStatMap]
+  )
+
+  const alerts = useMemo(() => computeAlerts(groupInfos, allWithStats), [groupInfos, allWithStats])
+
+  const actions = useMemo(() => {
+    const acts: string[] = []
+    const withGap = groupInfos.filter(g => g.gapPct != null)
+    const sorted  = [...withGap].sort((a, b) => (a.gapPct ?? 0) - (b.gapPct ?? 0))
+    const worst   = sorted[0]
+    const best    = sorted[sorted.length - 1]
+
+    if (worst?.gapPct != null && worst.gapPct < -5)
+      acts.push(`Οι ${worst.label} βρίσκονται ${Math.abs(worst.gapPct)}% κάτω από τον στόχο`)
+    if (best?.gapPct != null && best.gapPct > 10)
+      acts.push(`Οι ${best.label} ξεπερνούν τον στόχο κατά ${best.gapPct}%`)
+    if (worst && best && worst !== best && (worst.gapPct ?? 0) < -8)
+      acts.push(`Σκέψου μετακίνηση 1-2 ατόμων από ${best.label} προς ${worst.label}`)
+
+    const needCoaching = allWithStats.filter(x => (x.stats.achievePct ?? 100) < 50 && x.stats.totalDays >= 5)
+    if (needCoaching.length > 0)
+      acts.push(`${needCoaching.length} εργαζόμενοι χρειάζονται coaching (< 50% target achievement)`)
+
+    return acts
+  }, [groupInfos, allWithStats])
+
+  // Filter by search + status
+  const filteredIds = useMemo(() => {
+    const set = new Set<string>()
+    for (const { emp, stats } of allWithStats) {
+      const matchSearch = !search || emp.full_name.toLowerCase().includes(search.toLowerCase())
+      const matchFilter = filter === 'all' || stats.status === filter
+      if (matchSearch && matchFilter) set.add(emp.id)
+    }
+    return set
+  }, [allWithStats, search, filter])
+
+  const selectedStats   = selectedEmp ? empStatMap.get(selectedEmp.id)                          : null
+  const selectedMetrics = selectedEmp ? allMetrics.find(m => m.employee.id === selectedEmp.id) : null
+
+  const selectedRank = useMemo(() => {
+    if (!selectedEmp || !selectedStats?.liveUPH) return { rank: 0, groupSize: 0 }
+    const group  = groupInfos.find(g => g.employees.some(e => e.id === selectedEmp.id))
+    if (!group) return { rank: 0, groupSize: 0 }
+    const sorted = [...group.withData].sort((a, b) => (b.stats.liveUPH ?? 0) - (a.stats.liveUPH ?? 0))
+    const rank   = sorted.findIndex(x => x.emp.id === selectedEmp.id) + 1
+    return { rank, groupSize: group.withData.length }
+  }, [selectedEmp, selectedStats, groupInfos])
+
+  if (loading) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-slate-400 text-sm animate-pulse">Φόρτωση δεδομένων...</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden bg-slate-50">
+
+      {/* ── HEADER ── */}
+      <div className="flex items-center gap-3 px-5 py-3 bg-white border-b border-slate-200 flex-shrink-0">
+        <div>
+          <h1 className="text-base font-bold text-slate-800 leading-tight">Shift Management</h1>
+          <p className="text-[11px] text-slate-400">Operations Control Center · Παραγωγικότητα Βάρδιας</p>
+        </div>
+        <div className="flex-1" />
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Αναζήτηση εργαζομένου..."
+            className="pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg bg-white text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-200 w-48"
+          />
+        </div>
+        <div className="flex items-center gap-0.5 bg-slate-100 rounded-lg p-0.5">
+          {(['all', 'above', 'near', 'below'] as const).map(f => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all ${
+                filter === f ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {f === 'all' ? 'Όλοι' : f === 'above' ? '🟢 Πάνω' : f === 'near' ? '🟡 Κοντά' : '🔴 Κάτω'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── BODY ── */}
+      <div className="flex flex-1 overflow-hidden">
+
+        {/* Table area */}
+        <div className="flex-1 overflow-y-auto">
+          {groupInfos.map(g => {
+            const isCollapsed = !!collapsed[g.label]
+            const visible     = g.employees.filter(e => filteredIds.has(e.id))
+            if (filter !== 'all' && visible.length === 0) return null
+
+            return (
+              <div key={g.label}>
+                <GroupHeader
+                  g={g}
+                  collapsed={isCollapsed}
+                  onToggle={() => setCollapsed(prev => ({ ...prev, [g.label]: !prev[g.label] }))}
+                />
+                {!isCollapsed && (
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-white">
+                        {['Εργαζόμενος', 'Live UPH', 'Στόχος', 'Gap', 'Trend', 'Ημέρες / Στόχο', 'Status'].map(h => (
+                          <th key={h} className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center first:text-left border-b border-slate-100">
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visible.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="px-4 py-4 text-xs text-slate-400 text-center italic">
+                            Κανένας εργαζόμενος αντιστοιχεί στο φίλτρο
+                          </td>
+                        </tr>
+                      ) : visible.map(emp => {
+                        const stats = empStatMap.get(emp.id)
+                        if (!stats) return null
+                        return (
+                          <EmpRow
+                            key={emp.id}
+                            emp={emp}
+                            stats={stats}
+                            isSelected={selectedEmp?.id === emp.id}
+                            onClick={() => setSelectedEmp(prev => prev?.id === emp.id ? null : emp)}
+                          />
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )
+          })}
         </div>
 
-        {/* ── AI Insights ─────────────────────────────────────────────────────── */}
-        <AIInsights sorted={sortedAll} />
-
+        {/* Right panel */}
+        <div className="w-64 flex-shrink-0 bg-white border-l border-slate-200 overflow-y-auto">
+          <RightPanel alerts={alerts} actions={actions} />
+        </div>
       </div>
+
+      {/* Employee drawer */}
+      {selectedEmp && selectedStats && (
+        <EmployeeDrawer
+          emp={selectedEmp}
+          stats={selectedStats}
+          metrics={selectedMetrics}
+          rank={selectedRank.rank}
+          groupSize={selectedRank.groupSize}
+          onClose={() => setSelectedEmp(null)}
+          onNavigate={() => navigate(`/team/employees/${selectedEmp.id}`)}
+        />
+      )}
     </div>
   )
 }
