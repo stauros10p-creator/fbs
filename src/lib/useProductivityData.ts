@@ -128,8 +128,9 @@ export function computeMetrics(emp: Employee, snap: ProdSnapshot | null, maxUPH 
     ...(snap?.operators_month ?? []),
   ]
 
-  const todayRow = allTodayRows.find(r => nameMatch(emp.full_name, r.ONOMA, emp.oracle_name)) ?? null
-  const monthRow = allMonthRows.find(r => nameMatch(emp.full_name, r.ONOMA, emp.oracle_name)) ?? null
+  const empOracleName = (emp as any).oracle_name as string | null | undefined
+  const todayRow = allTodayRows.find(r => nameMatch(emp.full_name, r.ONOMA, empOracleName)) ?? null
+  const monthRow = allMonthRows.find(r => nameMatch(emp.full_name, r.ONOMA, empOracleName)) ?? null
 
   // For team avg, still use primary role
   const isPicker   = emp.primary_role === 'picker'
@@ -162,9 +163,9 @@ export function computeMetrics(emp: Employee, snap: ProdSnapshot | null, maxUPH 
     : Math.round((parseInt(emp.skill_level) / 5) * 55 + 25)
 
   // ── Flexibility: count roles this employee has been active in ──────────────
-  const inPickers   = [...(snap?.pickers_today   ?? []), ...(snap?.pickers_month   ?? [])].some(r => nameMatch(emp.full_name, r.ONOMA, emp.oracle_name))
-  const inPackers   = [...(snap?.packers_today   ?? []), ...(snap?.packers_month   ?? [])].some(r => nameMatch(emp.full_name, r.ONOMA, emp.oracle_name))
-  const inOperators = [...(snap?.operators_today ?? []), ...(snap?.operators_month ?? [])].some(r => nameMatch(emp.full_name, r.ONOMA, emp.oracle_name))
+  const inPickers   = [...(snap?.pickers_today   ?? []), ...(snap?.pickers_month   ?? [])].some(r => nameMatch(emp.full_name, r.ONOMA, empOracleName))
+  const inPackers   = [...(snap?.packers_today   ?? []), ...(snap?.packers_month   ?? [])].some(r => nameMatch(emp.full_name, r.ONOMA, empOracleName))
+  const inOperators = [...(snap?.operators_today ?? []), ...(snap?.operators_month ?? [])].some(r => nameMatch(emp.full_name, r.ONOMA, empOracleName))
   const flexibilityRoles = [inPickers, inPackers, inOperators].filter(Boolean).length
   const flexibilityScore = Math.round((Math.max(1, flexibilityRoles) / 3) * 100)
 
