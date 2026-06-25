@@ -230,7 +230,7 @@ function AchieveBadge({ achieved, total, pct }: { achieved: number; total: numbe
 }
 
 interface GroupInfo {
-  label: string; color: string; employees: Employee[]
+  label: string; color: string; role: string; employees: Employee[]
   withData: { emp: Employee; stats: EmpStats }[]
   avgUPH: number | null; target: number; gapPct: number | null
   above: number; near: number; below: number; noData: number
@@ -688,7 +688,7 @@ export function EmployeeListPage() {
       const target = ROLE_TARGETS[groupRole] ?? 70
       const gapPct = avgUPH != null ? Math.round((avgUPH - target) / target * 100) : null
       return {
-        label: g.label, color: g.color, employees: emps, withData, avgUPH, target, gapPct,
+        label: g.label, color: g.color, role: groupRole, employees: emps, withData, avgUPH, target, gapPct,
         above:  withData.filter(x => x.stats.status === 'above').length,
         near:   withData.filter(x => x.stats.status === 'near').length,
         below:  withData.filter(x => x.stats.status === 'below').length,
@@ -813,7 +813,7 @@ export function EmployeeListPage() {
                         {visible.length === 0 ? (
                           <tr><td colSpan={7} className="px-4 py-4 text-xs text-slate-400 text-center italic">Κανένας εργαζόμενος αντιστοιχεί στο φίλτρο</td></tr>
                         ) : visible.map(({ emp, stats }) => (
-                          <EmpRow key={emp.id} emp={emp} stats={stats} groupRole={g.roles[0]}
+                          <EmpRow key={emp.id} emp={emp} stats={stats} groupRole={g.role}
                             isSelected={selectedEmp?.id === emp.id}
                             onClick={() => setSelectedEmp(p => p?.id === emp.id ? null : emp)} />
                         ))}
