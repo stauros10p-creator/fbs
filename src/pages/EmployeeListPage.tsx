@@ -166,14 +166,17 @@ function computeStats(emp: Employee, metrics: any, prodSnap: any, overrideRole?:
     .filter((r: DayRow) => nameMatch(emp.full_name, r.ONOMA, oracleName) && isValidDay(r))
     .sort((a: DayRow, b: DayRow) => a.DAY.localeCompare(b.DAY))
   const isSecondaryRole = overrideRole != null && overrideRole !== emp.primary_role
+  // Always compute monthUPH from role-specific validDays to avoid cross-role contamination
+  // (e.g. an operator who is also a picker would otherwise get picker UPH shown in the operator group)
+  const validMonthUPH = validDays.length > 0
+    ? Math.round(validDays.reduce((s, d) => s + (d.UPH ?? 0), 0) / validDays.length * 10) / 10 : null
   let todayUPH: number | null, monthUPH: number | null
   if (isSecondaryRole) {
-    monthUPH = validDays.length > 0
-      ? Math.round(validDays.reduce((s, d) => s + (d.UPH ?? 0), 0) / validDays.length * 10) / 10 : null
+    monthUPH = validMonthUPH
     todayUPH = null
   } else {
     todayUPH = metrics?.todayUPH ?? null
-    monthUPH = metrics?.monthUPH ?? null
+    monthUPH = validMonthUPH
   }
   const liveUPH = todayUPH ?? monthUPH
   const isLive  = todayUPH != null
