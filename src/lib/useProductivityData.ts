@@ -53,17 +53,27 @@ export interface EmployeeMetrics {
 
 // ── Operator code → surname fragment mapping ───────────────────────────────────
 export const OPERATOR_CODES: Record<string, string> = {
+  // AutoStore operators
   pkan: 'Κανελλοπουλος', vtri: 'Τριανταφυλλοπουλος', kkou: 'Κουκας',
   gpav: 'Παυλιδης',      mkar: 'Καρυπιδης',           akar: 'Καρυπιδης',
   spap: 'Παππας',        mabi: 'Μπιζας',               span: 'Πανοπουλος',
   fpap: 'Παπανικολαου',  gkok: 'Κοκολακη',             ppet: 'Πετροπουλος',
-  fsal: 'Σαλαχας',       xkon: 'Κωνσταντινιδης',       mthe: 'Θεοδωροπουλου',
+  fsal: 'Σαλαχας',       xkon: 'Κωνσταντινιδης',       mthe: 'Θεοδωρακοπουλου',
   pgog: 'Γκογκακη',      itso: 'Τσολαριδου',           nkou: 'Κουσουρης',
   tiak: 'Ιακωβιδης',     gkav: 'Καββαδας',             erhy: 'Χυσσολι',
   msia: 'Σιαμεζ',        epso: 'Ψωμαδελη',             kman: 'Μανουσακιδης',
   luna: 'Luna',          mark: 'Mark Carlo',            edes: 'Charl',
   skar: 'Καρρας',        mois: 'Moises',                ioak: 'Ιωακειμιδης',
-  tmav: 'Μαβιδη',        mfit: 'Φιτσαλου',
+  tmav: 'Μαβιδη',        mfit: 'Φιτσαλου',             feli: 'Felix',
+  // Packers / Pickers
+  mome: 'Omeri',         mago: 'Ago',                   alem: 'Λεμοντζογλου',
+  kdim: 'Δημητροπουλου', azou: 'Ζουρνατσιδου',         anan: 'Αναγνωστοπουλου',
+  digi: 'Γιαννιτσου',    emou: 'Μουρατιδου',            eklo: 'Κλουδα',
+  dali: 'Αληγιαννη',     ekot: 'Κοτρωνη',              gsta: 'Σταματοπουλου',
+  mkou: 'Κουλα',         mmix: 'Μιχαηλιδου',           pefe: 'Πετρακου',
+  chio: 'Ιωσηφογλου',    lkaz: 'Καζακου',              igri: 'Γριβα',
+  kodo: 'Δοσχορη',       nkos: 'Κωστιδη',              mpal: 'Μπαιρακταροβ',
+  savr: 'Αβραμιδου',     ntso: 'Τσουτουριδης',
 }
 
 // ── Name Matching ─────────────────────────────────────────────────────────────
@@ -147,9 +157,8 @@ export function computeMetrics(emp: Employee, snap: ProdSnapshot | null, maxUPH 
 
   const hoursToday  = todayRow?.ORES   ?? null
   const ordersToday = (todayRow?.ORDERS != null && todayRow.ORDERS > 0) ? todayRow.ORDERS : null
-  // Valid session: ≥ 3h AND > 100 orders AND < 20h (filters noise + Oracle 24h artifacts)
-  const validSession = hoursToday != null && ordersToday != null
-    && hoursToday >= 3 && hoursToday < 13 && ordersToday > 100
+  // Valid session: 1.5h–11.99h (filters noise + Oracle 24h artifacts)
+  const validSession = hoursToday != null && hoursToday >= 1.5 && hoursToday <= 11.99
   const todayUPH    = (todayRow?.UPH != null && todayRow.UPH > 0 && validSession) ? todayRow.UPH : null
   const monthUPH    = (monthRow as any)?.UPH_AVG > 0 ? (monthRow as any).UPH_AVG : null
   const ordersMonth = (monthRow as any)?.ORDERS_AVG ?? null
