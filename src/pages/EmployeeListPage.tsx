@@ -275,7 +275,7 @@ function GroupHeader({ g, collapsed, onToggle }: { g: GroupInfo; collapsed: bool
   )
 }
 
-function EmpRow({ emp, stats, isSelected, onClick }: { emp: Employee; stats: EmpStats; isSelected: boolean; onClick: () => void }) {
+function EmpRow({ emp, stats, groupRole, isSelected, onClick }: { emp: Employee; stats: EmpStats; groupRole: string; isSelected: boolean; onClick: () => void }) {
   const bg = isSelected ? 'bg-blue-50' :
     stats.status === 'below' ? 'hover:bg-red-50/40' :
     stats.status === 'above' ? 'hover:bg-emerald-50/40' : 'hover:bg-slate-50'
@@ -289,7 +289,11 @@ function EmpRow({ emp, stats, isSelected, onClick }: { emp: Employee; stats: Emp
           </div>
           <div className="min-w-0">
             <div className="text-xs font-semibold text-slate-800 truncate leading-tight">{emp.full_name}</div>
-            <div className="text-[10px] text-slate-400 capitalize">{emp.primary_role}</div>
+            <div className="text-[10px] text-slate-400 capitalize">
+              {emp.primary_role === groupRole
+                ? emp.primary_role
+                : <span>{groupRole} <span className="opacity-60">(2ος ρόλος)</span></span>}
+            </div>
           </div>
         </div>
       </td>
@@ -809,13 +813,14 @@ export function EmployeeListPage() {
                         {visible.length === 0 ? (
                           <tr><td colSpan={7} className="px-4 py-4 text-xs text-slate-400 text-center italic">Κανένας εργαζόμενος αντιστοιχεί στο φίλτρο</td></tr>
                         ) : visible.map(({ emp, stats }) => (
-                          <EmpRow key={emp.id} emp={emp} stats={stats}
+                          <EmpRow key={emp.id} emp={emp} stats={stats} groupRole={g.roles[0]}
                             isSelected={selectedEmp?.id === emp.id}
                             onClick={() => setSelectedEmp(p => p?.id === emp.id ? null : emp)} />
                         ))}
                       </tbody>
                     </table>
                     {histCfg && <HistoricalStatsTable cfg={histCfg} />}
+
                   </>
                 )}
               </div>
