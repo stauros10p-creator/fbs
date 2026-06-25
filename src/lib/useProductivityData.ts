@@ -127,15 +127,22 @@ export function impactColor(score: number): string {
 // maxUPH: pass the team's max UPH for normalization (two-pass from hook)
 export function computeMetrics(emp: Employee, snap: ProdSnapshot | null, maxUPH = 200): EmployeeMetrics {
   // Search ALL role arrays for today — role-agnostic
-  const allTodayRows = [
-    ...(snap?.pickers_today   ?? []),
-    ...(snap?.packers_today   ?? []),
-    ...(snap?.operators_today ?? []),
+  // Primary role first → find() stops at first match, so primary role always wins
+  const isOp  = emp.primary_role === 'operator'
+  const isPkr = emp.primary_role === 'packer'
+  const allTodayRows = isOp ? [
+    ...(snap?.operators_today ?? []), ...(snap?.packers_today  ?? []), ...(snap?.pickers_today ?? []),
+  ] : isPkr ? [
+    ...(snap?.packers_today   ?? []), ...(snap?.pickers_today  ?? []), ...(snap?.operators_today ?? []),
+  ] : [
+    ...(snap?.pickers_today   ?? []), ...(snap?.packers_today  ?? []), ...(snap?.operators_today ?? []),
   ]
-  const allMonthRows = [
-    ...(snap?.pickers_month   ?? []),
-    ...(snap?.packers_month   ?? []),
-    ...(snap?.operators_month ?? []),
+  const allMonthRows = isOp ? [
+    ...(snap?.operators_month ?? []), ...(snap?.packers_month  ?? []), ...(snap?.pickers_month ?? []),
+  ] : isPkr ? [
+    ...(snap?.packers_month   ?? []), ...(snap?.pickers_month  ?? []), ...(snap?.operators_month ?? []),
+  ] : [
+    ...(snap?.pickers_month   ?? []), ...(snap?.packers_month  ?? []), ...(snap?.operators_month ?? []),
   ]
 
   const empOracleName = (emp as any).oracle_name as string | null | undefined
