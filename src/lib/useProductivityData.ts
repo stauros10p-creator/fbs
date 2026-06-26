@@ -51,29 +51,57 @@ export interface EmployeeMetrics {
   hasData:          boolean
 }
 
-// ── Operator code → surname fragment mapping ───────────────────────────────────
+// ── Operator code → oracle name mapping ───────────────────────────────────────
+// Team-sheet entries use FULL oracle names (enables exact disambiguation).
+// Non-team-sheet entries keep surname fragments (unique, no collision risk).
 export const OPERATOR_CODES: Record<string, string> = {
-  // AutoStore operators
+  // AutoStore leaders/operators (non-team-sheet → surname fragments)
   pkan: 'Κανελλοπουλος', vtri: 'Τριανταφυλλοπουλος', kkou: 'Κουκας',
   gpav: 'Παυλιδης',      mkar: 'Καρυπιδης',           akar: 'Καρυπιδης',
   spap: 'Παππας',        mabi: 'Μπιζας',               span: 'Πανοπουλος',
-  fpap: 'Παπανικολαου',  gkok: 'Κοκολακη',             ppet: 'Πετροπουλος',
-  fsal: 'Σαλαχας',       xkon: 'Κωνσταντινιδης',       mthe: 'Θεοδωρακοπουλου',
-  pgog: 'Γκογκακη',      itso: 'Τσολαριδου',           nkou: 'Κουσουρης',
-  tiak: 'Ιακωβιδης',     gkav: 'Καββαδας',             erhy: 'Χυσσολι',
-  msia: 'Σιαμεζ',        epso: 'Ψωμαδελη',             kman: 'Μανουσακιδης',
-  luna: 'Luna',          mark: 'Mark Carlo',            edes: 'Charl',
-  skar: 'Καρρας',        mois: 'Moises',                ioak: 'Ιωακειμιδης',
-  tmav: 'Μαβιδη',        mfit: 'Φιτσαλου',             feli: 'Felix',
-  // Packers / Pickers
-  mome: 'Omeri',         mago: 'Ago',                   alem: 'Λεμοντζογλου',
-  kdim: 'Δημητροπουλου', azou: 'Ζουρνατσιδου',         anan: 'Αναγνωστοπουλου',
-  digi: 'Γιαννιτσου',    emou: 'Μουρατιδου',            eklo: 'Κλουδα',
-  dali: 'Αληγιαννη',     ekot: 'Κοτρωνη',              gsta: 'Σταματοπουλου',
-  mkou: 'Κουλα',         mmix: 'Μιχαηλιδου',           pefe: 'Πετρακου',
-  chio: 'Ιωσηφογλου',    lkaz: 'Καζακου',              igri: 'Γριβα',
-  kodo: 'Δοσχορη',       nkos: 'Κωστιδη',              mpal: 'Μπαιρακταροβ',
-  savr: 'Αβραμιδου',     ntso: 'Τσουτουριδης',
+  fpap: 'Παπανικολαου',  xkon: 'Κωνσταντινιδης',      nkou: 'Κουσουρης',
+  gkav: 'Καββαδας',      epso: 'Ψωμαδελη',             kman: 'Μανουσακιδης',
+  skar: 'Καρρας',        alem: 'Λεμοντζογλου',
+  // Team-sheet entries → full oracle names (exact match, eliminates surname collisions)
+  erhy: 'ΕΡΙΚΑ ΧΥΣΟΛΛΙ',
+  fsal: 'ΦΟΙΒΟΣ - ΓΕΩΡΓΙΟΣ ΣΑΛΑΧΑΣ',
+  gkok: 'ΓΑΡΥΦΑΛΛΙΑ ΚΟΚΟΛΑΚΗ',
+  ioak: 'ΗΛΙΑΣ ΙΩΑΚΕΙΜΙΔΗΣ',
+  msia: 'ΜΙΧΡΑΝ ΣΙΑΜΕΖ',
+  mthe: 'ΜΕΛΕΤΙΑ ΘΕΟΔΩΡΑΚΟΠΟΥΛΟΥ',
+  ppet: 'ΠΑΝΑΓΙΩΤΗΣ ΠΕΤΡΟΠΟΥΛΟΣ',
+  azou: 'ΑΛΕΞΑΝΔΡΑ ΖΟΥΡΝΑΤΣΙΔΟΥ',
+  anan: 'ΑΝΝΑ ΑΝΑΓΝΩΣΤΟΠΟΥΛΟΥ',
+  gsta: 'ΙΩΑΝΝΑ ΣΤΑΜΑΤΟΠΟΥΛΟΥ',
+  dali: 'ΔΕΣΠΟΙΝΑ ΑΛΗΓΙΑΝΝΗ',
+  digi: 'ΔΗΜΗΤΡΑ ΓΙΑΝΝΙΤΣΟΥ',
+  emou: 'ΕΙΡΗΝΗ ΜΟΥΡΑΤΙΔΟΥ',
+  eklo: 'ΕΛΕΝΗ ΚΛΟΥΔΑ',
+  kdim: 'ΑΙΚΑΤΕΡΙΝΗ ΔΗΜΗΤΡΟΠΟΥΛΟΥ',
+  lkaz: 'ΛΥΔΙΑ ΚΑΖΑΚΟΥ',
+  mkou: 'ΜΑΡΙΑ ΚΟΥΛΛΑ',
+  mmix: 'ΜΑΡΙΑ ΜΙΧΑΗΛΙΔΟΥ',
+  nkos: 'ΝΙΝΑ ΚΩΣΤΙΔΗ',
+  chio: 'ΧΑΡΙΚΛΕΙΑ ΙΩΣΗΦΟΓΛΟΥ',
+  luna: 'KEVIN LUNA CUNANAN',
+  mark: 'MARK CARLO SIBLAG',
+  mois: 'MOISES JR SILAWAN',
+  edes: 'CHARL EDSEL SIBLAG',
+  feli: 'FELIX JR SIBLAG',
+  ntso: 'ΝΙΚΟΛΑΟΣ ΤΣΟΥΤΟΥΡΙΔΗΣ',
+  mago: 'MINA AGO',
+  kodo: 'ΚΩΝΣΤΑΝΤΙΝΑ ΔΟΣΧΟΡΗ',
+  pefe: 'ΦΩΤΕΙΝΗ ΠΕΤΡΑΚΟΥ',
+  mpal: 'ΑΛΕΞΙΟΣ ΜΠΑΙΡΑΚΤΑΡΟΒ',
+  igri: 'ΕΙΡΗΝΗ ΓΡΙΒΑ',
+  tiak: 'ΘΕΟΔΩΡΟΣ ΙΑΚΩΒΙΔΗΣ',
+  tmav: 'ΤΑΤΙΑΝΑ ΜΑΒΙΔΗ',
+  pgog: 'ΠΗΝΕΛΟΠΗ ΓΚΟΓΚΑΚΗ',
+  mome: 'MARIJE OMERI',
+  ekot: 'ΕΥΑΓΓΕΛΙΑ ΚΟΤΡΩΝΗ',
+  mfit: 'ΜΑΡΙΑ - ΔΗΜΗΤΡΑ ΦΙΤΣΑΛΟΥ',
+  itso: 'ΙΩΑΝΝΑ ΤΣΟΛΑΡΙΔΟΥ',
+  savr: 'Αβραμιδου',     // non-team-sheet, keep surname
 }
 
 // ── Name Matching ─────────────────────────────────────────────────────────────
@@ -81,19 +109,28 @@ export function normGreek(s: string): string {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 }
 
-// oracleName: pass emp.oracle_name to do exact matching instead of fuzzy surname.
-// Eliminates false positives when two employees share the same surname.
+// nameMatch: three-tier lookup for Oracle ONOMA → Supabase employee
+//   oracleName: emp.oracle_name (set in Supabase) — when present, disables fuzzy fallback.
+//   OPERATOR_CODES with full oracle names ensures exact disambiguation for team-sheet employees.
 export function nameMatch(empName: string, oracleNoma: string, oracleName?: string | null): boolean {
-  // 1. Exact match via stored oracle_name field (highest priority)
-  if (oracleName) {
-    return normGreek(oracleNoma) === normGreek(oracleName)
-  }
-  // 2. AutoStore operator code lookup (undef14 codes like "gkok", "pgog" etc.)
+  // 1. Exact match via stored oracle_name field
+  if (oracleName && normGreek(oracleNoma) === normGreek(oracleName)) return true
+
+  // 2. AutoStore operator code lookup (e.g. "gkok", "chio")
   const code = oracleNoma.trim().toLowerCase()
   if (OPERATOR_CODES[code]) {
-    return normGreek(empName).includes(normGreek(OPERATOR_CODES[code]))
+    const codeTarget = OPERATOR_CODES[code]
+    if (oracleName) {
+      // oracle_name is set: verify this code truly maps to THIS employee.
+      // For full-name targets (team-sheet): exact substring match against oracle_name.
+      // For surname targets (non-team-sheet): oracle_name must contain the surname.
+      return normGreek(oracleName).includes(normGreek(codeTarget))
+    }
+    return normGreek(empName).includes(normGreek(codeTarget))
   }
-  // 3. Fuzzy surname fallback: last word of Oracle name treated as surname
+
+  // 3. Fuzzy surname fallback — only when no oracle_name (prevents false positives)
+  if (oracleName) return false
   const parts = oracleNoma.trim().split(/\s+/)
   const surname = parts[parts.length - 1]
   return surname.length > 3 && normGreek(empName).includes(normGreek(surname))
