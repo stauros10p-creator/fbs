@@ -40,7 +40,7 @@ function diffColor(v: number) {
   return 'text-muted'
 }
 
-export function OpsAfixeisPage() {
+export function OpsAfixesPage() {
   const navigate = useNavigate()
   const [allRows, setAllRows] = useState<ComparisonRow[]>([])
   const [genAt, setGenAt] = useState('')
