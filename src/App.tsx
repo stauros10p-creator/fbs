@@ -23,6 +23,12 @@ import { CopilotPage } from '@/pages/CopilotPage'
 import { StaffPlanPage } from '@/pages/StaffPlanPage'
 import { HourlyForecastPage } from '@/pages/HourlyForecastPage'
 import { LoginPage, getAuthUser } from '@/pages/LoginPage'
+// FBS Outbound pages
+import { FbsOutboundOverviewPage } from '@/pages/FbsOutboundOverviewPage'
+import { FbsDownloadThroughputPage } from '@/pages/FbsDownloadThroughputPage'
+import { FbsLivePortMonitoringPage } from '@/pages/FbsLivePortMonitoringPage'
+import { FbsMonoMultiPage } from '@/pages/FbsMonoMultiPage'
+import { FbsPickingPerPortPage } from '@/pages/FbsPickingPerPortPage'
 
 export default function App() {
   const [authed, setAuthed] = useState(() => getAuthUser() !== null)
@@ -38,12 +44,23 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard"               element={<DashboardPage />} />
+
+            {/* FBS Outbound */}
+            <Route path="/outbound/overview"             element={<FbsOutboundOverviewPage />} />
+            <Route path="/outbound/download-throughput"  element={<FbsDownloadThroughputPage />} />
+            <Route path="/outbound/live-port-monitoring" element={<FbsLivePortMonitoringPage />} />
+            <Route path="/outbound/mono-multi"           element={<FbsMonoMultiPage />} />
+            <Route path="/outbound/picking-per-port"     element={<FbsPickingPerPortPage />} />
+
+            {/* Team / Employees */}
             <Route path="/team"                    element={<TeamPage />} />
             <Route path="/team/employees"          element={<EmployeeListPage />} />
             <Route path="/team/employees/:id"      element={<EmployeeDetailPage />} />
             <Route path="/team/top-performers"     element={<TopPerformersPage />} />
             <Route path="/team/impact"             element={<ImpactScorePage />} />
             <Route path="/team/heatmap"            element={<ProductivityHeatmapPage />} />
+
+            {/* Other */}
             <Route path="/schedule"                element={<SchedulePage />} />
             <Route path="/forecast"                element={<ForecastPage />} />
             <Route path="/ops"                     element={<OpsSnapshotPage />} />
