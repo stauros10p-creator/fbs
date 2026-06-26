@@ -126,7 +126,13 @@ export function nameMatch(empName: string, oracleNoma: string, oracleName?: stri
       // For surname targets (non-team-sheet): oracle_name must contain the surname.
       return normGreek(oracleName).includes(normGreek(codeTarget))
     }
-    return normGreek(empName).includes(normGreek(codeTarget))
+    // No oracle_name: try full codeTarget first, then surname fragment fallback.
+    // Needed because codeTarget may be a full oracle name (e.g. 'ΘΕΟΔΩΡΟΣ ΙΑΚΩΒΙΔΗΣ')
+    // while empName uses a nickname (e.g. 'Θοδωρής Ιακωβίδης').
+    if (normGreek(empName).includes(normGreek(codeTarget))) return true
+    const ctParts = codeTarget.split(/\s+/)
+    const ctSurname = ctParts[ctParts.length - 1]
+    return ctSurname.length > 3 && normGreek(empName).includes(normGreek(ctSurname))
   }
 
   // 3. Fuzzy surname fallback — only when no oracle_name (prevents false positives)
