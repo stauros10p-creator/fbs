@@ -245,7 +245,7 @@ function GroupHeader({ g, collapsed, onToggle }: { g: GroupInfo; collapsed: bool
       <span className="flex items-center gap-2 flex-shrink-0">
         {collapsed ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronUp className="w-3.5 h-3.5 text-slate-400" />}
         <span className="font-bold text-xs text-slate-700 tracking-widest uppercase">{g.label}</span>
-        <span className="text-slate-400 text-xs">({g.employees.length})</span>
+        <span className="text-slate-400 text-xs">({g.withData.length})</span>
       </span>
       {g.avgUPH != null && (
         <div className="flex items-center gap-5 flex-1">
