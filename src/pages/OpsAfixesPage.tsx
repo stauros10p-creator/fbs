@@ -2,11 +2,11 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Construction } from 'lucide-react'
 
-export function OpsEpistrofesPage() {
+export function OpsAfixesPage() {
   const navigate = useNavigate()
   return (
     <div className="flex-1 flex flex-col">
-      <PageHeader title="OpsEpistrofesPage" subtitle="Operations Report" />
+      <PageHeader title="OpsAfixesPage" subtitle="Operations Report" />
       <div className="flex-1 flex flex-col items-center justify-center gap-4 text-slate-400">
         <Construction className="w-12 h-12 opacity-40" />
         <p className="text-sm">Η σελίδα είναι υπό επαναφόρτωση</p>
