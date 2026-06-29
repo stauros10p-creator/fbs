@@ -24,9 +24,13 @@ interface PickingPortSnapshot {
 }
 
 interface PortMonitoringRow {
-  ORA: string | number  // hour 0-23
-  STATHMOS: string
-  SUBORDERS: number
+  ZONA: string
+  P1: number
+  P2: number
+  P3: number
+  P4: number
+  P5: number
+  TOTAL: number
 }
 
 interface PortMonitoringSnapshot {
@@ -159,40 +163,39 @@ export function FbsPickingPerPortPage() {
   const avgTemPerOrder = totalOrders > 0 ? (totalTemaxia / totalOrders).toFixed(2) : '—'
 
   // Hourly chart data from port_monitoring
-  let hourlyData: Record<string, any>[] = []
-  if (portData?.rows?.length) {
-    const hoursMap: Record<string, Record<string, number>> = {}
-    portData.rows.forEach(r => {
-      const h = String(r.ORA).padStart(2, '0') + ':00'
-      if (!hoursMap[h]) hoursMap[h] = {}
-      hoursMap[h][r.STATHMOS] = (hoursMap[h][r.STATHMOS] ?? 0) + r.SUBORDERS
-    })
-    hourlyData = Object.entries(hoursMap)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([hour, ports]) => ({ hour, ...ports }))
-  }
+  const hourlyData: Record<string, any>[] = portData?.rows?.map(r => ({
+    hour: r.ZONA,
+    'Port 1': r.P1 ?? 0,
+    'Port 2': r.P2 ?? 0,
+    'Port 3': r.P3 ?? 0,
+    'Port 4': r.P4 ?? 0,
+    'Port 5': r.P5 ?? 0,
+  })) ?? []
 
-  // Time zone table
-  const timeZones = [
-    { label: '00:00–06:00', hours: [0, 1, 2, 3, 4, 5] },
-    { label: '06:00–12:00', hours: [6, 7, 8, 9, 10, 11] },
-    { label: '12:00–18:00', hours: [12, 13, 14, 15, 16, 17] },
-    { label: '18:00–24:00', hours: [18, 19, 20, 21, 22, 23] },
+  // Time zone table — group ZONA rows into 6-hour bands
+  const TIME_BANDS = [
+    { label: '00:00–06:00', from: 0, to: 5 },
+    { label: '06:00–12:00', from: 6, to: 11 },
+    { label: '12:00–18:00', from: 12, to: 17 },
+    { label: '18:00–24:00', from: 18, to: 23 },
   ]
 
   const tzSummary = portData?.rows?.length
-    ? timeZones.map(tz => {
-        const portTotals: Record<string, number> = {}
-        PORTS.forEach(p => { portTotals[p] = 0 })
+    ? TIME_BANDS.map(band => {
+        const portTotals: Record<string, number> = { 'Port 1': 0, 'Port 2': 0, 'Port 3': 0, 'Port 4': 0, 'Port 5': 0 }
         let zoneTotalSub = 0
         portData.rows.forEach(r => {
-          const h = +r.ORA
-          if (tz.hours.includes(h)) {
-            portTotals[r.STATHMOS] = (portTotals[r.STATHMOS] ?? 0) + r.SUBORDERS
-            zoneTotalSub += r.SUBORDERS
+          const h = parseInt(String(r.ZONA))
+          if (!isNaN(h) && h >= band.from && h <= band.to) {
+            portTotals['Port 1'] += r.P1 ?? 0
+            portTotals['Port 2'] += r.P2 ?? 0
+            portTotals['Port 3'] += r.P3 ?? 0
+            portTotals['Port 4'] += r.P4 ?? 0
+            portTotals['Port 5'] += r.P5 ?? 0
+            zoneTotalSub += r.TOTAL ?? 0
           }
         })
-        return { label: tz.label, portTotals, zoneTotalSub }
+        return { label: band.label, portTotals, zoneTotalSub }
       })
     : null
 
@@ -315,50 +318,50 @@ export function FbsPickingPerPortPage() {
           {/* Port Summary Table */}
           <div className="panel overflow-auto">
             <div className="text-sm font-semibold text-slate-700 mb-3">Σύνοψη Picking ανά Port</div>
-            <table className="w-full text-xs">
+            <table className="w-full" style={{ fontSize: '10px' }}>
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">
-                  <th className="text-left px-2 py-1.5 text-slate-500 font-medium">Port</th>
-                  <th className="text-right px-2 py-1.5 text-slate-500 font-medium">Suborders</th>
-                  <th className="text-right px-2 py-1.5 text-slate-500 font-medium">%</th>
-                  <th className="text-right px-2 py-1.5 text-slate-500 font-medium">Orders</th>
-                  <th className="text-right px-2 py-1.5 text-slate-500 font-medium">%</th>
-                  <th className="text-right px-2 py-1.5 text-slate-500 font-medium">Τεμάχια</th>
-                  <th className="text-right px-2 py-1.5 text-slate-500 font-medium">%</th>
-                  <th className="text-right px-2 py-1.5 text-slate-500 font-medium">Sub/Ord</th>
-                  <th className="text-right px-2 py-1.5 text-slate-500 font-medium">Τεμ/Ord</th>
+                  <th className="text-left px-1.5 py-1 text-slate-500 font-medium">Port</th>
+                  <th className="text-right px-1.5 py-1 text-slate-500 font-medium">Suborders</th>
+                  <th className="text-right px-1.5 py-1 text-slate-500 font-medium">%</th>
+                  <th className="text-right px-1.5 py-1 text-slate-500 font-medium">Orders</th>
+                  <th className="text-right px-1.5 py-1 text-slate-500 font-medium">%</th>
+                  <th className="text-right px-1.5 py-1 text-slate-500 font-medium">Τεμάχια</th>
+                  <th className="text-right px-1.5 py-1 text-slate-500 font-medium">%</th>
+                  <th className="text-right px-1.5 py-1 text-slate-500 font-medium">Sub/Ord</th>
+                  <th className="text-right px-1.5 py-1 text-slate-500 font-medium">Τεμ/Ord</th>
                 </tr>
               </thead>
               <tbody>
                 {portSummary.map((p, i) => (
                   <tr key={p.port} className={cn('border-b border-slate-100', i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50')}>
-                    <td className="px-2 py-1.5 text-slate-700 font-medium">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
+                    <td className="px-1.5 py-1 text-slate-700 font-medium">
+                      <div className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
                         {p.port}
                       </div>
                     </td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-slate-700">{fmt(p.suborders)}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-slate-400">{fmtPct(p.suborders, totalSuborders)}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-slate-700">{fmt(p.orders)}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-slate-400">{fmtPct(p.orders, totalOrders)}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-slate-700">{fmt(p.temaxia)}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-slate-400">{fmtPct(p.temaxia, totalTemaxia)}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-slate-700">{p.orders > 0 ? (p.suborders / p.orders).toFixed(2) : '—'}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-slate-700">{p.orders > 0 ? (p.temaxia / p.orders).toFixed(2) : '—'}</td>
+                    <td className="px-1.5 py-1 text-right tabular-nums text-slate-700">{fmt(p.suborders)}</td>
+                    <td className="px-1.5 py-1 text-right tabular-nums text-slate-400">{fmtPct(p.suborders, totalSuborders)}</td>
+                    <td className="px-1.5 py-1 text-right tabular-nums text-slate-700">{fmt(p.orders)}</td>
+                    <td className="px-1.5 py-1 text-right tabular-nums text-slate-400">{fmtPct(p.orders, totalOrders)}</td>
+                    <td className="px-1.5 py-1 text-right tabular-nums text-slate-700">{fmt(p.temaxia)}</td>
+                    <td className="px-1.5 py-1 text-right tabular-nums text-slate-400">{fmtPct(p.temaxia, totalTemaxia)}</td>
+                    <td className="px-1.5 py-1 text-right tabular-nums text-slate-700">{p.orders > 0 ? (p.suborders / p.orders).toFixed(2) : '—'}</td>
+                    <td className="px-1.5 py-1 text-right tabular-nums text-slate-700">{p.orders > 0 ? (p.temaxia / p.orders).toFixed(2) : '—'}</td>
                   </tr>
                 ))}
                 {/* Totals */}
                 <tr className="border-t-2 border-slate-300 bg-blue-50 font-semibold text-blue-700">
-                  <td className="px-2 py-1.5">Σύνολο</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{fmt(totalSuborders)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">100%</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{fmt(totalOrders)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">100%</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{fmt(totalTemaxia)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">100%</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{avgSubPerOrder}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{avgTemPerOrder}</td>
+                  <td className="px-1.5 py-1">Σύνολο</td>
+                  <td className="px-1.5 py-1 text-right tabular-nums">{fmt(totalSuborders)}</td>
+                  <td className="px-1.5 py-1 text-right tabular-nums">100%</td>
+                  <td className="px-1.5 py-1 text-right tabular-nums">{fmt(totalOrders)}</td>
+                  <td className="px-1.5 py-1 text-right tabular-nums">100%</td>
+                  <td className="px-1.5 py-1 text-right tabular-nums">{fmt(totalTemaxia)}</td>
+                  <td className="px-1.5 py-1 text-right tabular-nums">100%</td>
+                  <td className="px-1.5 py-1 text-right tabular-nums">{avgSubPerOrder}</td>
+                  <td className="px-1.5 py-1 text-right tabular-nums">{avgTemPerOrder}</td>
                 </tr>
               </tbody>
             </table>
