@@ -115,15 +115,15 @@ export function FbsOutboundOverviewPage() {
 
   // ─── Derived values ───────────────────────────────────────────────────────
 
-  const totalSimera = data?.dlRows.reduce((s, r) => s + (Number(r.SIMERA) || 0), 0) ?? 0
+  const totalSimera = data?.dlRows.filter(r => r.WRA !== 'Total').reduce((s, r) => s + (Number(r.SIMERA) || 0), 0) ?? 0
 
   const totalSuborders = data?.ppRows.reduce((s, r) => s + (Number(r.SUBORDERS) || 0), 0) ?? 0
   const totalOrders    = data?.ppRows.reduce((s, r) => s + (Number(r.ORDERS)    || 0), 0) ?? 0
   const totalTemaxia   = data?.ppRows.reduce((s, r) => s + (Number(r.TEMAXIA)   || 0), 0) ?? 0
 
   // Mono vs Multi totals from mm
-  const monoRows  = data?.mmRows.filter(r => r.TYPOS === 'MONO')  ?? []
-  const multiRows = data?.mmRows.filter(r => r.TYPOS === 'MULTI') ?? []
+  const monoRows  = data?.mmRows.filter(r => r.TYPOS === 'Mono')  ?? []
+  const multiRows = data?.mmRows.filter(r => r.TYPOS === 'Multi') ?? []
   const monoTotal  = monoRows.reduce((s, r)  => s + (Number(r.KINISEIS) || 0), 0)
   const multiTotal = multiRows.reduce((s, r) => s + (Number(r.KINISEIS) || 0), 0)
   const mmTotal = monoTotal + multiTotal
@@ -332,7 +332,7 @@ export function FbsOutboundOverviewPage() {
                 </div>
               </div>
               <button
-                onClick={() => navigate('/outbound/port-monitoring')}
+                onClick={() => navigate('/outbound/live-port-monitoring')}
                 className="text-xs text-blue-500 hover:text-blue-600 font-medium"
               >
                 View Details →
