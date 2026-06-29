@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { RefreshCw, Layers, ShoppingBag, Package, TrendingUp, BarChart2 } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { RefreshCw, Layers, ShoppingBag, Package, TrendingUp, BarChart2, Calendar } from 'lucide-react'
 import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
@@ -53,11 +53,41 @@ function fmtPct(part: number, total: number) {
   return (part / total * 100).toFixed(1) + '%'
 }
 
+function today() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function daysAgo(n: number) {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  return d.toISOString().slice(0, 10)
+}
+
+const PRESETS = [
+  { key: 'today', label: 'Σήμερα' },
+  { key: '3d',    label: '3 μέρες' },
+  { key: '7d',    label: '7 μέρες' },
+  { key: 'all',   label: 'Όλα' },
+]
+
 export function FbsPickingPerPortPage() {
   const [snapshot, setSnapshot] = useState<PickingPortSnapshot | null>(null)
   const [portData, setPortData] = useState<PortMonitoringSnapshot | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [dateFrom, setDateFrom] = useState<string>(today())
+  const [dateTo, setDateTo]     = useState<string>(today())
+  const [activePreset, setActivePreset] = useState<string>('today')
+
+  function applyPreset(preset: string, snap?: PickingPortSnapshot | null) {
+    const s = snap ?? snapshot
+    setActivePreset(preset)
+    const t = today()
+    if (preset === 'today') { setDateFrom(t); setDateTo(t) }
+    else if (preset === '3d') { setDateFrom(daysAgo(2)); setDateTo(t) }
+    else if (preset === '7d') { setDateFrom(daysAgo(6)); setDateTo(t) }
+    else if (preset === 'all' && s) { setDateFrom(s.date_from); setDateTo(s.date_to) }
+  }
 
   async function fetchData() {
     setRefreshing(true)
@@ -68,7 +98,10 @@ export function FbsPickingPerPortPage() {
         .order('created_at', { ascending: false })
         .limit(1)
         .single()
-      if (!error && data) setSnapshot(data)
+      if (!error && data) {
+        setSnapshot(data)
+        applyPreset(activePreset, data)
+      }
 
       const { data: pm } = await supabase
         .from('port_monitoring_snapshots')
@@ -87,6 +120,12 @@ export function FbsPickingPerPortPage() {
 
   useEffect(() => { fetchData() }, [])
 
+  // Filtered rows based on date range
+  const rows = useMemo(() => {
+    if (!snapshot) return []
+    return snapshot.rows.filter(r => r.IMEROMINIA >= dateFrom && r.IMEROMINIA <= dateTo)
+  }, [snapshot, dateFrom, dateTo])
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
@@ -103,8 +142,6 @@ export function FbsPickingPerPortPage() {
       </div>
     )
   }
-
-  const rows = snapshot.rows
 
   // Port summary
   const portSummary = PORTS.map(port => {
@@ -179,10 +216,48 @@ export function FbsPickingPerPortPage() {
           <div className="text-xs text-slate-400 font-medium mb-0.5">FBS - Outbound</div>
           <h1 className="text-xl font-bold text-slate-800">Picking ανά Port</h1>
           <p className="text-xs text-slate-400 mt-0.5">
-            {snapshot.date_from} — {snapshot.date_to} · Ανανεώθηκε {new Date(snapshot.generated_at).toLocaleString('el-GR')}
+            Δεδομένα: {snapshot.date_from} — {snapshot.date_to} · Ανανεώθηκε {new Date(snapshot.generated_at).toLocaleString('el-GR')}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {/* Date range picker */}
+          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+            <Calendar className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+            <div className="flex items-center gap-1">
+              {PRESETS.map(p => (
+                <button
+                  key={p.key}
+                  onClick={() => applyPreset(p.key)}
+                  className={cn(
+                    'px-2 py-0.5 rounded text-xs font-medium transition-colors',
+                    activePreset === p.key
+                      ? 'bg-blue-500 text-white'
+                      : 'text-slate-500 hover:bg-slate-200'
+                  )}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <div className="w-px h-4 bg-slate-200" />
+            <input
+              type="date"
+              value={dateFrom}
+              min={snapshot.date_from}
+              max={dateTo}
+              onChange={e => { setDateFrom(e.target.value); setActivePreset('') }}
+              className="text-xs text-slate-600 bg-transparent border-none outline-none cursor-pointer"
+            />
+            <span className="text-xs text-slate-400">—</span>
+            <input
+              type="date"
+              value={dateTo}
+              min={dateFrom}
+              max={snapshot.date_to}
+              onChange={e => { setDateTo(e.target.value); setActivePreset('') }}
+              className="text-xs text-slate-600 bg-transparent border-none outline-none cursor-pointer"
+            />
+          </div>
           <button
             onClick={fetchData}
             disabled={refreshing}
